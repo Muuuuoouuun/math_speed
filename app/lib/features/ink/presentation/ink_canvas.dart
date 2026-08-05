@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_tokens.dart';
@@ -165,8 +167,8 @@ class _InkPainter extends CustomPainter {
     canvas.save();
     canvas.clipRRect(rrect);
 
-    _paintGuides(canvas, size);
-    _paintHint(canvas, size);
+    final guideBox = _paintGuides(canvas, size);
+    _paintHint(canvas, size, guideBox);
 
     // Optimization: 입력 지연이 바로 체감되므로 획 목록만 다시 그리고,
     // 질감은 같은 경로를 한 번 더 옅게 겹치는 방식으로 싸게 처리합니다.
@@ -188,7 +190,8 @@ class _InkPainter extends CustomPainter {
     );
   }
 
-  void _paintGuides(Canvas canvas, Size size) {
+  /// 안내선을 그리고, 글씨를 앉힐 상자 영역을 돌려줍니다.
+  Rect _paintGuides(Canvas canvas, Size size) {
     // 가로 괘선.
     final rulePaint = Paint()
       ..color = AppPalette.rule.withValues(alpha: 0.75)
@@ -257,9 +260,11 @@ class _InkPainter extends CustomPainter {
         cornerPaint,
       );
     }
+
+    return box;
   }
 
-  void _paintHint(Canvas canvas, Size size) {
+  void _paintHint(Canvas canvas, Size size, Rect guideBox) {
     final text = hint;
     if (text == null || text.isEmpty) return;
 
@@ -276,10 +281,9 @@ class _InkPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: size.width - 40);
 
-    painter.paint(
-      canvas,
-      Offset((size.width - painter.width) / 2, (size.height / 2) + (size.height * 0.20)),
-    );
+    // 기준선과 겹치지 않게 안내 상자 바로 아래에 둡니다.
+    final top = math.min(guideBox.bottom + 10, size.height - painter.height - 12);
+    painter.paint(canvas, Offset((size.width - painter.width) / 2, top));
   }
 
   void _drawStroke(Canvas canvas, InkStrokeData stroke) {

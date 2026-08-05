@@ -95,8 +95,15 @@ class _PaperPainter extends CustomPainter {
     }
 
     // 4) 공책 왼쪽 여백선.
+    //    넓은 화면에서는 본문이 가운데로 모이므로, 선도 본문 기준으로 그어야
+    //    한 장의 종이 위에 쓴 것처럼 보입니다.
     if (showMarginLine) {
-      final marginX = math.min(size.width * 0.11, 46.0);
+      final contentWidth = math.min(
+        size.width,
+        AppSpacing.maxContentWidth + (AppSpacing.gutter * 2),
+      );
+      final contentLeft = (size.width - contentWidth) / 2;
+      final marginX = contentLeft + math.min(contentWidth * 0.11, 46.0);
       canvas.drawLine(
         Offset(marginX, 0),
         Offset(marginX, size.height),

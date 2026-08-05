@@ -850,7 +850,7 @@ class _CountdownOverlay extends StatelessWidget {
 
     return Positioned.fill(
       child: ColoredBox(
-        color: AppPalette.paper.withValues(alpha: 0.94),
+        color: AppPalette.paper.withValues(alpha: 0.97),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
