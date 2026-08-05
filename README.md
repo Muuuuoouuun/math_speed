@@ -6,7 +6,7 @@
 
 - `app/`: Flutter 클라이언트 코드
 - `functions/`: Firebase Cloud Functions 2nd gen
-- `docs/`: 아키텍처 및 데이터 설계 문서
+- `docs/`: 아키텍처 및 데이터 설계 문서 (UI 규칙은 `docs/ui-design-system.md`)
 - `firestore.rules`: Firestore 보안 규칙
 - `firestore.indexes.json`: Firestore 인덱스 정의
 
@@ -17,6 +17,19 @@
 - 손글씨 입력 캔버스와 ML Kit 연동용 서비스 래퍼
 - 랭크 세션 생성 / 제출 / 집계 갱신용 Cloud Functions 골격
 - 학교/지역/전체 리더보드 집계 스키마
+- 종이·연필 톤의 UI 디자인 시스템과 시작 → 플레이 → 결과 화면 흐름
+
+## 검증
+
+```bash
+cd app
+flutter pub get
+flutter analyze
+flutter test
+```
+
+위젯 테스트는 작은 폰부터 태블릿까지 세 가지 화면 크기에서 화면을 그려 보며
+레이아웃이 넘치지 않는지 확인합니다.
 
 ## 다음 실행 권장 순서
 

@@ -10,6 +10,11 @@ import '../domain/math_problem.dart';
 import '../domain/performance_grade.dart';
 import '../domain/problem_generator.dart';
 
+/// 한 판의 진행 단계.
+///
+/// 시작 화면(ready) → 플레이(playing) → 결과(finished) 순서로 넘어갑니다.
+enum RoundPhase { ready, playing, finished }
+
 class GameSessionController extends ChangeNotifier {
   GameSessionController({
     ProblemGenerator? problemGenerator,
@@ -17,7 +22,10 @@ class GameSessionController extends ChangeNotifier {
     PerformanceGrader? performanceGrader,
   })  : _problemGenerator = problemGenerator ?? const ProblemGenerator(),
         _brainScoreCalculator = brainScoreCalculator ?? const BrainScoreCalculator(),
-        _performanceGrader = performanceGrader ?? const PerformanceGrader();
+        _performanceGrader = performanceGrader ?? const PerformanceGrader() {
+    // 시작 화면에서도 게이지가 가득 찬 상태로 보이도록 초기 시간을 채워 둡니다.
+    _timeLeftMs = GameModeConfig.fromMode(_gameMode).initialTimeMs;
+  }
 
   final ProblemGenerator _problemGenerator;
   final BrainScoreCalculator _brainScoreCalculator;
@@ -32,7 +40,7 @@ class GameSessionController extends ChangeNotifier {
   int _totalBonusMs = 0;
   int _currentCombo = 0;
   bool _isRunning = false;
-  bool _hasFinished = false;
+  RoundPhase _phase = RoundPhase.ready;
   MathProblem? _currentProblem;
   final List<ProblemAttemptResult> _attempts = <ProblemAttemptResult>[];
   String _recognizedText = '';
@@ -55,7 +63,13 @@ class GameSessionController extends ChangeNotifier {
   int get totalBonusMs => _totalBonusMs;
   int get currentCombo => _currentCombo;
   bool get isRunning => _isRunning;
-  bool get isGameOver => _hasFinished;
+  RoundPhase get phase => _phase;
+  bool get isReady => _phase == RoundPhase.ready;
+  bool get isGameOver => _phase == RoundPhase.finished;
+
+  /// 남은 시간 비율(0~1). 게이지와 강조색 계산에 씁니다.
+  double get timeRatio =>
+      (_timeLeftMs / gameModeConfig.maxTimeMs).clamp(0.0, 1.0).toDouble();
   String get recognizedText => _recognizedText;
   String get manualFallback => _manualFallback;
   InkMetrics get currentInkMetrics => _currentInkMetrics;
@@ -93,7 +107,7 @@ class GameSessionController extends ChangeNotifier {
     _totalBonusMs = 0;
     _currentCombo = 0;
     _isRunning = true;
-    _hasFinished = false;
+    _phase = RoundPhase.playing;
     _attempts.clear();
     _recognizedText = '';
     _manualFallback = '';
@@ -115,6 +129,14 @@ class GameSessionController extends ChangeNotifier {
   }
 
   void setGameMode(GameMode mode) {
+    // 시작 화면에서는 판을 새로 열지 않고 선택만 바꿉니다.
+    if (_phase == RoundPhase.ready) {
+      if (_gameMode == mode) return;
+      _gameMode = mode;
+      _timeLeftMs = gameModeConfig.initialTimeMs;
+      notifyListeners();
+      return;
+    }
     if (_gameMode == mode && _attempts.isEmpty && _isRunning) {
       return;
     }
@@ -125,6 +147,30 @@ class GameSessionController extends ChangeNotifier {
     startRound(mode: _gameMode);
   }
 
+  /// 판을 접고 시작 화면으로 돌아갑니다.
+  void returnToReady() {
+    _roundTicker?.cancel();
+    _roundTicker = null;
+    _isRunning = false;
+    _phase = RoundPhase.ready;
+    _problemIndex = 0;
+    _timeLeftMs = gameModeConfig.initialTimeMs;
+    _elapsedMs = 0;
+    _totalBonusMs = 0;
+    _currentCombo = 0;
+    _attempts.clear();
+    _currentProblem = null;
+    _recognizedText = '';
+    _manualFallback = '';
+    _lastAttemptCorrect = null;
+    _lastBonusAwardedMs = 0;
+    _lastSubmittedAnswer = '';
+    _lastExpectedAnswer = null;
+    _currentInkMetrics = InkMetrics.empty;
+    _clearRevision++;
+    notifyListeners();
+  }
+
   void updateRecognitionPreview(String value) {
     _recognizedText = value.trim();
     notifyListeners();
@@ -132,6 +178,14 @@ class GameSessionController extends ChangeNotifier {
 
   void updateManualFallback(String value) {
     _manualFallback = value.trim();
+    notifyListeners();
+  }
+
+  /// 손글씨만 지웁니다. 문제와 남은 시간은 그대로 둡니다.
+  void clearInk() {
+    _clearRevision++;
+    _recognizedText = '';
+    _currentInkMetrics = InkMetrics.empty;
     notifyListeners();
   }
 
@@ -155,7 +209,7 @@ class GameSessionController extends ChangeNotifier {
     final elapsedMsForProblem = DateTime.now()
         .difference(_currentProblemStartedAt ?? DateTime.now())
         .inMilliseconds
-        .clamp(250, 99999) as int;
+        .clamp(250, 99999);
     final correct = normalized == expected;
     var awardedBonusMs = 0;
 
@@ -167,7 +221,7 @@ class GameSessionController extends ChangeNotifier {
     );
 
     if (correct) {
-      final nextTime = (_timeLeftMs + gameModeConfig.bonusTimeMs).clamp(0, gameModeConfig.maxTimeMs) as int;
+      final nextTime = (_timeLeftMs + gameModeConfig.bonusTimeMs).clamp(0, gameModeConfig.maxTimeMs);
       awardedBonusMs = nextTime - _timeLeftMs;
       _totalBonusMs += awardedBonusMs;
       _timeLeftMs = nextTime;
@@ -222,7 +276,7 @@ class GameSessionController extends ChangeNotifier {
     _roundTicker?.cancel();
     _roundTicker = null;
     _isRunning = false;
-    _hasFinished = true;
+    _phase = RoundPhase.finished;
     _currentProblem = null;
     _recognizedText = '';
     _manualFallback = '';

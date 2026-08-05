@@ -1,6 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 
 import 'core/bootstrap/app_environment.dart';
+import 'core/theme/app_tokens.dart';
+import 'core/widgets/paper_backdrop.dart';
+import 'core/widgets/pencil_doodles.dart';
 import 'features/game/presentation/brain_training_page.dart';
 import 'features/profile/data/profile_repository.dart';
 import 'features/profile/domain/player_profile.dart';
@@ -69,11 +72,7 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const _LoadingScreen();
     }
 
     if (widget.environment.firebaseReady && !(_profile?.isComplete ?? false)) {
@@ -88,6 +87,44 @@ class _AppShellState extends State<AppShell> {
       environment: widget.environment,
       profile: _profile,
       onProfileUpdated: _loadProfile,
+    );
+  }
+}
+
+/// 프로필을 읽어 오는 동안 보여 주는 화면.
+///
+/// 빈 회색 스피너 대신 마스코트를 세워 두어 첫인상을 앱 톤과 맞춥니다.
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      body: PaperBackdrop(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const PencilMascot(size: 88, mood: MascotMood.sleepy),
+              const SizedBox(height: AppSpacing.lg),
+              Text('연필 깎는 중...', style: theme.textTheme.titleLarge),
+              const SizedBox(height: AppSpacing.xs),
+              Text('기록을 불러오고 있어요', style: theme.textTheme.bodyMedium),
+              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(
+                width: 120,
+                child: LinearProgressIndicator(
+                  minHeight: 6,
+                  backgroundColor: AppPalette.paperDeep,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppPalette.mint),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
