@@ -15,6 +15,7 @@ import '../../profile/domain/player_profile.dart';
 import '../../profile/domain/profile_catalog.dart';
 import '../application/game_session_controller.dart';
 import '../domain/game_mode.dart';
+import 'ranked_run_page.dart';
 import 'widgets/game_pieces.dart';
 import 'widgets/timer_gauge.dart';
 
@@ -47,6 +48,9 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> with TickerProvid
 
   /// 3-2-1 카운트다운. null이면 표시하지 않습니다.
   int? _countdown;
+
+  /// 랭크전에서 고른 난이도(1~10).
+  int _rankedLevel = 1;
 
   // 지연 초기화로 두면 시작 화면만 보고 나갔을 때 dispose 시점에 컨트롤러가
   // 처음 만들어지면서 터집니다. initState에서 미리 만들어 둡니다.
@@ -144,6 +148,15 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> with TickerProvid
   void _restart() {
     _fallbackController.clear();
     _controller.restart();
+  }
+
+  Future<void> _openRankedRun() async {
+    unawaited(HapticFeedback.selectionClick());
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RankedRunPage(level: _rankedLevel),
+      ),
+    );
   }
 
   void _quitToReady() {
@@ -325,6 +338,21 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> with TickerProvid
             ],
           ),
         ],
+
+        // 랭크전. 연습과 규칙이 달라서 따로 떼어 두고, 참여 조건이 안 되면
+        // 버튼을 잠그는 대신 왜 안 되는지 적어 둡니다.
+        const SizedBox(height: AppSpacing.xxl),
+        const SectionHeading(label: 'RANKED', title: '랭크전', accent: AppPalette.gold),
+        const SizedBox(height: AppSpacing.sm),
+        _RankedEntryCard(
+          level: _rankedLevel,
+          available: widget.environment.firebaseReady && (profile?.isComplete ?? false),
+          blockedReason: widget.environment.firebaseReady
+              ? '학교와 지역을 저장하면 랭크전에 참여할 수 있어요.'
+              : '지금은 오프라인이라 랭크전을 열 수 없어요.',
+          onLevelChanged: (value) => setState(() => _rankedLevel = value),
+          onStart: _openRankedRun,
+        ),
       ],
     );
   }
@@ -884,6 +912,138 @@ class _CountdownOverlay extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
               Text('연필 준비!', style: theme.textTheme.titleLarge),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 시작 화면 아래쪽에 붙는 랭크전 입구.
+class _RankedEntryCard extends StatelessWidget {
+  const _RankedEntryCard({
+    required this.level,
+    required this.available,
+    required this.blockedReason,
+    required this.onLevelChanged,
+    required this.onStart,
+  });
+
+  final int level;
+  final bool available;
+  final String blockedReason;
+  final ValueChanged<int> onLevelChanged;
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return PaperCard(
+      accent: AppPalette.gold,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            '정해진 문제 수를 끝까지 풀고, 채점은 서버가 해요.\n점수는 학교와 지역 랭킹에 함께 쌓여요.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text('난이도 $level', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.xs),
+          // 글꼴 폭에 따라 줄바꿈이 들쭉날쭉해지지 않도록 5개씩 두 줄로 고정합니다.
+          for (var row = 0; row < 2; row++) ...<Widget>[
+            if (row > 0) const SizedBox(height: 6),
+            Row(
+              children: <Widget>[
+                for (var column = 0; column < 5; column++) ...<Widget>[
+                  if (column > 0) const SizedBox(width: 6),
+                  Expanded(
+                    child: _LevelDot(
+                      value: (row * 5) + column + 1,
+                      selected: (row * 5) + column + 1 == level,
+                      onTap: available
+                          ? () => onLevelChanged((row * 5) + column + 1)
+                          : null,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          if (available)
+            FilledButton(
+              onPressed: onStart,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppPalette.gold,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('랭크전 들어가기'),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppPalette.cardSunk,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppPalette.lineSoft),
+              ),
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.lock_outline_rounded, size: 16, color: AppPalette.faint),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(child: Text(blockedReason, style: theme.textTheme.bodyMedium)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LevelDot extends StatelessWidget {
+  const _LevelDot({
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final int value;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '난이도 $value',
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppDuration.quick,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppPalette.gold : AppPalette.card,
+            borderRadius: BorderRadius.circular(AppRadius.xs),
+            border: Border.all(
+              color: selected ? AppPalette.gold : AppPalette.line,
+              width: selected ? 2 : 1.2,
+            ),
+          ),
+          child: Text(
+            '$value',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: selected
+                  ? Colors.white
+                  : (enabled ? AppPalette.graphite : AppPalette.faint),
+            ),
           ),
         ),
       ),

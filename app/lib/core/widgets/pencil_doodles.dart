@@ -27,14 +27,17 @@ class PencilMascot extends StatefulWidget {
 enum MascotMood { happy, cheer, sleepy }
 
 class _PencilMascotState extends State<PencilMascot> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2600),
-  );
+  // 지연 초기화로 두면 bobbing이 꺼진 채로 살다가 dispose 시점에 컨트롤러가
+  // 처음 만들어지면서 터집니다. initState에서 미리 만들어 둡니다.
+  late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    );
     if (widget.bobbing) {
       _controller.repeat(reverse: true);
     }

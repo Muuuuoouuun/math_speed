@@ -1,6 +1,7 @@
 import 'package:brain_math/core/bootstrap/app_environment.dart';
 import 'package:brain_math/core/theme/app_theme.dart';
 import 'package:brain_math/features/game/presentation/brain_training_page.dart';
+import 'package:brain_math/features/profile/domain/player_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,14 +13,23 @@ const List<Size> _screens = <Size>[
   Size(834, 1194), // 태블릿
 ];
 
-Widget _app() {
+Widget _app({bool online = false, PlayerProfile? profile}) {
   return MaterialApp(
     theme: AppTheme.light(),
-    home: const BrainTrainingPage(
-      environment: AppEnvironment(firebaseReady: false),
+    home: BrainTrainingPage(
+      environment: AppEnvironment(firebaseReady: online),
+      profile: profile,
     ),
   );
 }
+
+const PlayerProfile _profile = PlayerProfile(
+  uid: 'uid-1',
+  displayName: '연필이',
+  schoolId: 'seoul-junior',
+  regionCode: 'KR-11',
+  grade: 4,
+);
 
 Future<void> _setScreen(WidgetTester tester, Size size) async {
   tester.view.physicalSize = size;
@@ -142,6 +152,36 @@ void main() {
     await _settle(tester);
 
     await _reveal(tester, find.text('난이도를 골라요'));
+
+    await _unmount(tester);
+  });
+
+  testWidgets('오프라인이면 랭크전이 잠기고 이유를 알려 준다', (tester) async {
+    await _setScreen(tester, const Size(430, 932));
+    await tester.pumpWidget(_app());
+    await _settle(tester);
+
+    await _reveal(tester, find.text('랭크전'));
+    expect(find.text('지금은 오프라인이라 랭크전을 열 수 없어요.'), findsOneWidget);
+    expect(find.text('랭크전 들어가기'), findsNothing);
+
+    await _unmount(tester);
+  });
+
+  testWidgets('프로필이 있으면 랭크전에 들어갈 수 있다', (tester) async {
+    await _setScreen(tester, const Size(430, 932));
+    await tester.pumpWidget(_app(online: true, profile: _profile));
+    await _settle(tester);
+
+    await _reveal(tester, find.text('랭크전 들어가기'));
+    expect(find.text('난이도 1'), findsOneWidget);
+
+    // 난이도를 바꾸면 표시가 따라옵니다.
+    await tester.ensureVisible(find.text('7'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('7'));
+    await _settle(tester);
+    expect(find.text('난이도 7'), findsOneWidget);
 
     await _unmount(tester);
   });
