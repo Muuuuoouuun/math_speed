@@ -214,4 +214,65 @@ void main() {
     clock.advance(const Duration(minutes: 6));
     expect(controller.timeLeft, Duration.zero);
   });
+
+  test('정답을 내면 바로 맞았다고 알려 준다', () async {
+    final repository = _FakeSessionRepository(envelope: _envelope(problemCount: 3));
+    final controller = build(repository);
+    await controller.start(level: 1);
+
+    final answer = controller.currentProblem!.answer;
+    controller.updateManualFallback('$answer');
+    await controller.submitCurrentProblem();
+
+    expect(controller.lastAnswerCorrect, isTrue);
+    expect(controller.localCorrectCount, 1);
+    expect(controller.localCombo, 1);
+  });
+
+  test('오답이면 정답을 알려 주고 연속이 끊긴다', () async {
+    final repository = _FakeSessionRepository(envelope: _envelope(problemCount: 3));
+    final controller = build(repository);
+    await controller.start(level: 1);
+
+    final first = controller.currentProblem!.answer;
+    controller.updateManualFallback('$first');
+    await controller.submitCurrentProblem();
+
+    final second = controller.currentProblem!.answer;
+    controller.updateManualFallback('${second + 1}');
+    await controller.submitCurrentProblem();
+
+    expect(controller.lastAnswerCorrect, isFalse);
+    expect(controller.lastExpectedAnswer, second);
+    expect(controller.localCombo, 0);
+    expect(controller.localCorrectCount, 1);
+  });
+
+  test('인식기가 흘린 기호가 붙어도 정답으로 본다', () async {
+    final repository = _FakeSessionRepository(envelope: _envelope(problemCount: 2));
+    final controller = build(repository);
+    await controller.start(level: 1);
+
+    final answer = controller.currentProblem!.answer;
+    // 손글씨 인식이 쉼표나 공백을 흘리는 상황.
+    controller.updateRecognitionPreview('$answer,');
+    await controller.submitCurrentProblem();
+
+    expect(controller.lastAnswerCorrect, isTrue);
+    expect(repository.submissions, isEmpty); // 아직 마지막 문제가 아님
+  });
+
+  test('포기해서 채운 빈 답은 채점 표시를 건드리지 않는다', () async {
+    final repository = _FakeSessionRepository(envelope: _envelope(problemCount: 3));
+    final controller = build(repository);
+    await controller.start(level: 1);
+
+    final answer = controller.currentProblem!.answer;
+    controller.updateManualFallback('$answer');
+    await controller.submitCurrentProblem();
+    await controller.giveUpAndSubmit();
+
+    expect(controller.lastAnswerCorrect, isTrue);
+    expect(controller.localCorrectCount, 1);
+  });
 }

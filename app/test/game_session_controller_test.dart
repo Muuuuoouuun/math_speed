@@ -101,4 +101,27 @@ void main() {
     expect(controller.clearRevision, revisionBefore + 1);
     expect(controller.currentProblem, same(problem));
   });
+
+  test('인식기가 흘린 기호가 붙어도 정답으로 본다', () {
+    final controller = GameSessionController();
+    addTearDown(controller.dispose);
+
+    controller.startRound(mode: GameMode.simpleCalculation, seed: 3);
+    final answer = controller.currentProblem!.answer;
+    controller.updateRecognitionPreview('$answer.');
+
+    expect(controller.submitCurrentProblem(), isTrue);
+    expect(controller.lastAttemptCorrect, isTrue);
+  });
+
+  test('숫자가 하나도 없는 입력은 제출되지 않는다', () {
+    final controller = GameSessionController();
+    addTearDown(controller.dispose);
+
+    controller.startRound(mode: GameMode.simpleCalculation);
+    controller.updateManualFallback('???');
+
+    expect(controller.submitCurrentProblem(), isFalse);
+    expect(controller.attemptCount, 0);
+  });
 }

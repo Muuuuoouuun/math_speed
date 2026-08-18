@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../../ink/domain/ink_models.dart';
+import '../domain/answer_normalizer.dart';
 import '../domain/brain_score.dart';
 import '../domain/game_mode.dart';
 import '../domain/math_problem.dart';
@@ -20,9 +21,11 @@ class GameSessionController extends ChangeNotifier {
     ProblemGenerator? problemGenerator,
     BrainScoreCalculator? brainScoreCalculator,
     PerformanceGrader? performanceGrader,
+    DateTime Function()? clock,
   })  : _problemGenerator = problemGenerator ?? const ProblemGenerator(),
         _brainScoreCalculator = brainScoreCalculator ?? const BrainScoreCalculator(),
-        _performanceGrader = performanceGrader ?? const PerformanceGrader() {
+        _performanceGrader = performanceGrader ?? const PerformanceGrader(),
+        _now = clock ?? DateTime.now {
     // 시작 화면에서도 게이지가 가득 찬 상태로 보이도록 초기 시간을 채워 둡니다.
     _timeLeftMs = GameModeConfig.fromMode(_gameMode).initialTimeMs;
   }
@@ -30,6 +33,10 @@ class GameSessionController extends ChangeNotifier {
   final ProblemGenerator _problemGenerator;
   final BrainScoreCalculator _brainScoreCalculator;
   final PerformanceGrader _performanceGrader;
+
+  /// 남은 시간은 프레임이 아니라 실제 시계로 재야 정확합니다.
+  /// 테스트에서는 가짜 시계를 넣어 시간을 마음대로 흘려보냅니다.
+  final DateTime Function() _now;
 
   GameMode _gameMode = GameMode.simpleCalculation;
   int _seed = 0;
@@ -121,8 +128,8 @@ class GameSessionController extends ChangeNotifier {
       mode: _gameMode,
       index: _problemIndex,
     );
-    _currentProblemStartedAt = DateTime.now();
-    _lastTickAt = DateTime.now();
+    _currentProblemStartedAt = _now();
+    _lastTickAt = _now();
     _clearRevision++;
     _startTicker();
     notifyListeners();
@@ -201,13 +208,15 @@ class GameSessionController extends ChangeNotifier {
     }
 
     final rawInput = _recognizedText.isEmpty ? _manualFallback : _recognizedText;
-    final normalized = rawInput.replaceAll(' ', '');
+    // 서버 채점과 같은 규칙으로 정리합니다. 인식기가 흘린 쉼표나 마침표 때문에
+    // 맞게 쓴 답이 오답이 되는 일을 막습니다.
+    final normalized = normalizeMathAnswer(rawInput);
     if (normalized.isEmpty) {
       return false;
     }
     final expected = problem.answer.toString();
-    final elapsedMsForProblem = DateTime.now()
-        .difference(_currentProblemStartedAt ?? DateTime.now())
+    final elapsedMsForProblem = _now()
+        .difference(_currentProblemStartedAt ?? _now())
         .inMilliseconds
         .clamp(250, 99999);
     final correct = normalized == expected;
@@ -238,7 +247,7 @@ class GameSessionController extends ChangeNotifier {
     _recognizedText = '';
     _manualFallback = '';
     _currentInkMetrics = InkMetrics.empty;
-    _currentProblemStartedAt = DateTime.now();
+    _currentProblemStartedAt = _now();
     _currentProblem = _problemGenerator.generateProblem(
       seed: _seed,
       mode: _gameMode,
@@ -259,7 +268,7 @@ class GameSessionController extends ChangeNotifier {
   void _startTicker() {
     _roundTicker = Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (!_isRunning) return;
-      final now = DateTime.now();
+      final now = _now();
       final deltaMs = now.difference(_lastTickAt ?? now).inMilliseconds;
       _lastTickAt = now;
       _elapsedMs += deltaMs;

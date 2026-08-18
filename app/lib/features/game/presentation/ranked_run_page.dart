@@ -242,6 +242,12 @@ class _RankedRunPageState extends State<RankedRunPage> {
                     color: timeLeft.inSeconds <= 30 ? AppPalette.blush : AppPalette.muted,
                     filled: timeLeft.inSeconds <= 30,
                   ),
+                  if (_controller.localCombo >= 2)
+                    PaperChip(
+                      label: '${_controller.localCombo}연속',
+                      color: AppPalette.mint,
+                      filled: true,
+                    ),
                 ],
               ),
             ),
@@ -274,6 +280,15 @@ class _RankedRunPageState extends State<RankedRunPage> {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
+
+        // 직전 문제 채점. 문제와 정규화 규칙이 서버와 똑같아서 여기서 미리
+        // 알려 줘도 최종 점수와 어긋나지 않습니다.
+        AnimatedSize(
+          duration: AppDuration.base,
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _buildFeedback(),
+        ),
 
         PaperCard(
           accent: _accent,
@@ -401,6 +416,30 @@ class _RankedRunPageState extends State<RankedRunPage> {
           style: theme.textTheme.bodyMedium,
         ),
       ],
+    );
+  }
+
+  Widget _buildFeedback() {
+    final correct = _controller.lastAnswerCorrect;
+    if (correct == null) {
+      return const SizedBox(width: double.infinity);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: FeedbackStamp(
+        key: ValueKey<int>(_controller.answeredCount),
+        tone: correct ? FeedbackTone.success : FeedbackTone.retry,
+        title: correct ? '잘했어요!' : '아쉬워요',
+        body: correct
+            ? '${_controller.localCorrectCount}문제째 맞혔어요'
+            : '정답은 ${_controller.lastExpectedAnswer ?? '-'}였어요',
+        trailing: correct
+            ? '${_controller.localCombo}연속'
+            : (_controller.lastSubmittedAnswer.isEmpty
+                ? '-'
+                : _controller.lastSubmittedAnswer),
+      ),
     );
   }
 

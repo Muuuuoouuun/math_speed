@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -Command \"if (Test-Path lib) { Remove-Item lib -Recurse -Force }\"",
-    "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
+    "serve": "npm run build && npx --yes firebase-tools emulators:start --only functions,firestore,auth --project brain-math-dev",
     "deploy": "npm run build && firebase deploy --only functions"
   },
   "dependencies": {

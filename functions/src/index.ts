@@ -23,6 +23,7 @@ import {
   LEADERBOARD_LIMIT,
   SESSION_TTL_MINUTES,
 } from './config';
+import { normalizeAnswer } from './answers';
 import { generateSessionProblems } from './mathEngine';
 import { calculateBrainScore } from './scoring';
 
@@ -89,10 +90,6 @@ function assertAuthenticated(auth: unknown): { uid: string } {
   }
 
   return { uid: String((auth as { uid: string }).uid) };
-}
-
-function normalizeAnswer(value: string | undefined): string {
-  return (value ?? '').replace(/\s+/g, '').replace(/[^\d-]/g, '');
 }
 
 function problemCountForLevel(level: number): number {

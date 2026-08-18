@@ -129,6 +129,17 @@ Future<void> _reveal(WidgetTester tester, Finder finder) async {
   expect(finder, findsOneWidget);
 }
 
+/// 목록을 맨 위로 되돌립니다. 작은 화면에서는 스크롤 위치에 따라 위쪽 항목이
+/// 아예 만들어지지 않기 때문에 필요합니다.
+Future<void> _toTop(WidgetTester tester) async {
+  final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+  for (var i = 0; i < 10; i++) {
+    await tester.dragFrom(Offset(size.width / 2, 100), const Offset(0, 240));
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 void main() {
   testWidgets('세션을 받아오는 동안 안내를 보여 준다', (tester) async {
     await _setScreen(tester, const Size(430, 932));
@@ -156,6 +167,23 @@ void main() {
       expect(find.text('랭크전 레벨 1'), findsOneWidget);
 
       await _reveal(tester, find.text('다음 문제'));
+
+      // 한 문제 풀어 채점 스탬프가 뜬 상태에서도 넘치지 않아야 합니다.
+      await _reveal(tester, find.byType(TextField));
+      await tester.enterText(find.byType(TextField), '1');
+      await tester.pump();
+      await _reveal(tester, find.text('다음 문제'));
+      await tester.tap(find.text('다음 문제'));
+      await _settle(tester);
+      await _toTop(tester);
+
+      expect(find.text('2 / 3'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is Text && (widget.data == '잘했어요!' || widget.data == '아쉬워요'),
+        ),
+        findsOneWidget,
+      );
 
       await _unmount(tester);
     });

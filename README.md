@@ -51,6 +51,22 @@ flutter test
 위젯 테스트는 작은 폰부터 태블릿까지 세 가지 화면 크기에서 화면을 그려 보며
 레이아웃이 넘치지 않는지 확인합니다.
 
+### 서버와 함께 확인하기
+
+랭크전은 서버 없이는 반쪽만 검증됩니다. 에뮬레이터로 실제 Cloud Functions를 띄워
+한 판을 돌려 볼 수 있습니다.
+
+```bash
+cd functions
+npm install
+npm run serve   # 빌드 후 에뮬레이터까지 띄웁니다 (firebase-tools는 npx로 받습니다)
+```
+
+띄운 뒤 익명 로그인 → `upsertPlayerProfile` → `createRankedSession` →
+`submitRankedSession` 순서로 호출하면 한 판이 그대로 재현됩니다. 이때 받은 응답을
+붙여 넣은 계약 테스트가 `app/test/ranked_contract_test.dart`에 있어서, 서버가 필드
+이름이나 타입을 바꾸면 클라이언트 테스트가 먼저 깨집니다.
+
 ## 다음 실행 권장 순서
 
 1. `app/`에서 Flutter 네이티브 셸 생성 및 Firebase 연결

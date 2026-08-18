@@ -13,12 +13,21 @@ const List<Size> _screens = <Size>[
   Size(834, 1194), // 태블릿
 ];
 
-Widget _app({bool online = false, PlayerProfile? profile}) {
+/// 라운드 타이머는 프레임이 아니라 실제 시계를 보기 때문에, 결과 화면까지 가려면
+/// 시계를 갈아 끼워야 합니다.
+class _FakeClock {
+  DateTime value = DateTime.utc(2026, 1, 1, 9);
+  DateTime call() => value;
+  void advance(Duration duration) => value = value.add(duration);
+}
+
+Widget _app({bool online = false, PlayerProfile? profile, _FakeClock? clock}) {
   return MaterialApp(
     theme: AppTheme.light(),
     home: BrainTrainingPage(
       environment: AppEnvironment(firebaseReady: online),
       profile: profile,
+      clock: clock?.call,
     ),
   );
 }
@@ -182,6 +191,51 @@ void main() {
     await tester.tap(find.text('7'));
     await _settle(tester);
     expect(find.text('난이도 7'), findsOneWidget);
+
+    await _unmount(tester);
+  });
+
+  for (final size in _screens) {
+    testWidgets('${size.width.toInt()}x${size.height.toInt()} 시간이 다 되면 결과 화면이 뜬다',
+        (tester) async {
+      await _setScreen(tester, size);
+      final clock = _FakeClock();
+      await tester.pumpWidget(_app(clock: clock));
+      await _settle(tester);
+
+      await _startRound(tester);
+      expect(find.text('남은 시간'), findsOneWidget);
+
+      // 판 시간을 넘겨 버립니다. 타이머는 100ms마다 실제 시계를 다시 봅니다.
+      clock.advance(const Duration(seconds: 90));
+      await tester.pump(const Duration(milliseconds: 100));
+      await _settle(tester);
+
+      expect(find.text('오늘의 등급'), findsOneWidget);
+      await _reveal(tester, find.text('브레인 점수'));
+      await _reveal(tester, find.text('이번 판 기록'));
+      await _reveal(tester, find.text('한 판 더 하기'));
+
+      await _unmount(tester);
+    });
+  }
+
+  testWidgets('결과 화면에서 한 판 더 하면 다시 플레이로 돌아간다', (tester) async {
+    await _setScreen(tester, const Size(430, 932));
+    final clock = _FakeClock();
+    await tester.pumpWidget(_app(clock: clock));
+    await _settle(tester);
+
+    await _startRound(tester);
+    clock.advance(const Duration(seconds: 90));
+    await tester.pump(const Duration(milliseconds: 100));
+    await _settle(tester);
+
+    await _reveal(tester, find.text('한 판 더 하기'));
+    await tester.tap(find.text('한 판 더 하기'));
+    await _settle(tester);
+
+    expect(find.text('남은 시간'), findsOneWidget);
 
     await _unmount(tester);
   });

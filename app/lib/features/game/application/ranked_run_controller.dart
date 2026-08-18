@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../ink/domain/ink_hash.dart';
 import '../../ink/domain/ink_models.dart';
 import '../data/ranked_session_repository.dart';
+import '../domain/answer_normalizer.dart';
 import '../domain/math_problem.dart';
 import '../domain/ranked_models.dart';
 import '../domain/ranked_problem_generator.dart';
@@ -62,6 +63,11 @@ class RankedRunController extends ChangeNotifier {
 
   int _currentIndex = 0;
   int _clearRevision = 0;
+  bool? _lastAnswerCorrect;
+  int? _lastExpectedAnswer;
+  String _lastSubmittedAnswer = '';
+  int _localCorrectCount = 0;
+  int _localCombo = 0;
   String _recognizedText = '';
   String _manualFallback = '';
   InkMetrics _inkMetrics = InkMetrics.empty;
@@ -96,6 +102,14 @@ class RankedRunController extends ChangeNotifier {
   /// 지금까지 답을 낸 문제 수.
   int get answeredCount => _answers.length;
 
+  // 아래 세 값은 화면에 바로 보여 주기 위한 것입니다. 최종 점수는 어디까지나
+  // 서버가 매기지만, 문제와 정규화 규칙이 서버와 똑같기 때문에 판정도 같습니다.
+  bool? get lastAnswerCorrect => _lastAnswerCorrect;
+  int? get lastExpectedAnswer => _lastExpectedAnswer;
+  String get lastSubmittedAnswer => _lastSubmittedAnswer;
+  int get localCorrectCount => _localCorrectCount;
+  int get localCombo => _localCombo;
+
   Future<void> start({required int level}) async {
     _expiryTicker?.cancel();
     _phase = RankedPhase.preparing;
@@ -106,6 +120,11 @@ class RankedRunController extends ChangeNotifier {
     _result = null;
     _currentIndex = 0;
     _clearRevision++;
+    _lastAnswerCorrect = null;
+    _lastExpectedAnswer = null;
+    _lastSubmittedAnswer = '';
+    _localCorrectCount = 0;
+    _localCombo = 0;
     _resetInput();
     notifyListeners();
 
@@ -161,7 +180,8 @@ class RankedRunController extends ChangeNotifier {
   Future<bool> submitCurrentProblem() async {
     if (_phase != RankedPhase.playing) return false;
     final raw = _recognizedText.isEmpty ? _manualFallback : _recognizedText;
-    final normalized = raw.replaceAll(' ', '');
+    // 서버가 채점 직전에 하는 정리를 그대로 미리 합니다.
+    final normalized = normalizeMathAnswer(raw);
     if (normalized.isEmpty) return false;
 
     _recordAnswer(normalized);
@@ -177,14 +197,28 @@ class RankedRunController extends ChangeNotifier {
   Future<void> giveUpAndSubmit() async {
     if (_phase != RankedPhase.playing) return;
     while (_answers.length < problemCount) {
-      _recordAnswer('');
+      _recordAnswer('', graded: false);
     }
     await _finish();
   }
 
-  void _recordAnswer(String text) {
+  void _recordAnswer(String text, {bool graded = true}) {
     final startedAt = _problemStartedAt ?? _now();
     final elapsedMs = _now().difference(startedAt).inMilliseconds.clamp(250, 99999);
+    final problem = _answers.length < _problems.length ? _problems[_answers.length] : null;
+
+    if (graded && problem != null) {
+      final correct = text == problem.answer.toString();
+      _lastAnswerCorrect = correct;
+      _lastExpectedAnswer = problem.answer;
+      _lastSubmittedAnswer = text;
+      if (correct) {
+        _localCorrectCount++;
+        _localCombo++;
+      } else {
+        _localCombo = 0;
+      }
+    }
 
     _answers.add(
       RankedSubmissionAnswer(

@@ -24,6 +24,7 @@ class BrainTrainingPage extends StatefulWidget {
     required this.environment,
     this.profile,
     this.onProfileUpdated,
+    this.clock,
     super.key,
   });
 
@@ -31,12 +32,15 @@ class BrainTrainingPage extends StatefulWidget {
   final PlayerProfile? profile;
   final Future<void> Function()? onProfileUpdated;
 
+  /// 테스트에서 시간을 흘려보내기 위한 자리. 비워 두면 실제 시계를 씁니다.
+  final DateTime Function()? clock;
+
   @override
   State<BrainTrainingPage> createState() => _BrainTrainingPageState();
 }
 
 class _BrainTrainingPageState extends State<BrainTrainingPage> with TickerProviderStateMixin {
-  final GameSessionController _controller = GameSessionController();
+  late final GameSessionController _controller = GameSessionController(clock: widget.clock);
   final DigitalInkService _digitalInkService = DigitalInkService(languageCode: 'ko');
   final TextEditingController _fallbackController = TextEditingController();
 
