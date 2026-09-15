@@ -1,4 +1,4 @@
-﻿export type MathProblem = {
+export type MathProblem = {
   index: number;
   level: number;
   prompt: string;
@@ -25,97 +25,108 @@ class DeterministicRng {
   }
 }
 
-export function generateSessionProblems(seed: number, level: number, count: number): MathProblem[] {
-  const rng = new DeterministicRng((seed ^ (level * 7919) ^ (count * 104729)) >>> 0);
-  return Array.from({ length: count }, (_, index) => buildProblem(rng, level, index));
+// Linearly interpolates a bound from `start` (first problem of a session) to `end` (last
+// problem), so a session's difficulty ramps up gradually instead of holding one fixed range
+// for every problem at a given level.
+function ramp(start: number, end: number, t: number): number {
+  return Math.round(start + (end - start) * t);
 }
 
-function buildProblem(rng: DeterministicRng, level: number, index: number): MathProblem {
+export function generateSessionProblems(seed: number, level: number, count: number): MathProblem[] {
+  const rng = new DeterministicRng((seed ^ (level * 7919) ^ (count * 104729)) >>> 0);
+  return Array.from({ length: count }, (_, index) => {
+    const t = count <= 1 ? 0 : index / (count - 1);
+    return buildProblem(rng, level, index, t);
+  });
+}
+
+function buildProblem(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
   switch (level) {
     case 1:
-      return singleDigitAdd(rng, level, index);
+      return singleDigitAdd(rng, level, index, t);
     case 2:
-      return within20Mix(rng, level, index);
+      return within20Mix(rng, level, index, t);
     case 3:
-      return twoDigitMix(rng, level, index);
+      return twoDigitMix(rng, level, index, t);
     case 4:
-      return carryPlusTable(rng, level, index);
+      return twoDigitFull(rng, level, index, t);
     case 5:
-      return tableMultiplication(rng, level, index);
+      return tableMultiplication(rng, level, index, t);
     case 6:
-      return exactDivision(rng, level, index);
+      return exactDivision(rng, level, index, t);
     case 7:
-      return twoStepMixed(rng, level, index);
+      return twoStepMixed(rng, level, index, t);
     case 8:
-      return threeNumberMixed(rng, level, index);
+      return threeNumberMixed(rng, level, index, t);
     case 9:
-      return multiMultiplyDivide(rng, level, index);
+      return multiMultiplyDivide(rng, level, index, t);
     default:
-      return bossRound(rng, level, index);
+      return bossRound(rng, level, index, t);
   }
 }
 
-function singleDigitAdd(rng: DeterministicRng, level: number, index: number): MathProblem {
+function singleDigitAdd(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
   const a = rng.between(1, 9);
-  const b = rng.between(1, 9);
+  const b = rng.between(1, ramp(5, 9, t));
   return { index, level, prompt: `${a} + ${b}`, answer: a + b };
 }
 
-function within20Mix(rng: DeterministicRng, level: number, index: number): MathProblem {
+function within20Mix(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
   const add = rng.nextInt(2) === 0;
   if (add) {
-    const a = rng.between(3, 15);
+    const a = rng.between(3, ramp(9, 15, t));
     const b = rng.between(1, 20 - a);
     return { index, level, prompt: `${a} + ${b}`, answer: a + b };
   }
 
-  const a = rng.between(8, 20);
+  const a = rng.between(8, ramp(14, 20, t));
   const b = rng.between(1, a - 1);
   return { index, level, prompt: `${a} - ${b}`, answer: a - b };
 }
 
-function twoDigitMix(rng: DeterministicRng, level: number, index: number): MathProblem {
+function twoDigitMix(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
   const add = rng.nextInt(2) === 0;
   if (add) {
-    const a = rng.between(11, 59);
-    const b = rng.between(11, 39);
+    const a = rng.between(10, ramp(19, 34, t));
+    const b = rng.between(10, ramp(19, 29, t));
     return { index, level, prompt: `${a} + ${b}`, answer: a + b };
   }
 
-  const a = rng.between(30, 99);
+  const a = rng.between(20, ramp(34, 54, t));
   const b = rng.between(10, a - 5);
   return { index, level, prompt: `${a} - ${b}`, answer: a - b };
 }
 
-function carryPlusTable(rng: DeterministicRng, level: number, index: number): MathProblem {
-  if (rng.nextInt(3) === 0) {
-    const a = rng.between(2, 9);
-    const b = rng.between(3, 9);
-    return { index, level, prompt: `${a} × ${b}`, answer: a * b };
+function twoDigitFull(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
+  const add = rng.nextInt(2) === 0;
+  if (add) {
+    const a = rng.between(35, ramp(59, 89, t));
+    const b = rng.between(25, ramp(49, 69, t));
+    return { index, level, prompt: `${a} + ${b}`, answer: a + b };
   }
 
-  const a = rng.between(28, 87);
-  const b = rng.between(15, 38);
-  return { index, level, prompt: `${a} + ${b}`, answer: a + b };
+  const a = rng.between(50, ramp(79, 99, t));
+  const b = rng.between(20, a - 15);
+  return { index, level, prompt: `${a} - ${b}`, answer: a - b };
 }
 
-function tableMultiplication(rng: DeterministicRng, level: number, index: number): MathProblem {
-  const a = rng.between(3, 12);
-  const b = rng.between(3, 12);
+function tableMultiplication(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
+  const a = rng.between(2, ramp(5, 9, t));
+  const b = rng.between(2, 9);
   return { index, level, prompt: `${a} × ${b}`, answer: a * b };
 }
 
-function exactDivision(rng: DeterministicRng, level: number, index: number): MathProblem {
-  const divisor = rng.between(2, 12);
-  const quotient = rng.between(2, 12);
+function exactDivision(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
+  const divisor = rng.between(2, ramp(5, 9, t));
+  const quotient = rng.between(2, 9);
   const dividend = divisor * quotient;
   return { index, level, prompt: `${dividend} ÷ ${divisor}`, answer: quotient };
 }
 
-function twoStepMixed(rng: DeterministicRng, level: number, index: number): MathProblem {
+function twoStepMixed(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
   const left = rng.between(2, 9);
   const right = rng.between(2, 9);
-  const tail = rng.between(5, 40);
+  const tail = rng.between(5, ramp(15, 30, t));
   const multiplyFirst = rng.nextInt(2) === 0;
 
   if (multiplyFirst) {
@@ -128,39 +139,39 @@ function twoStepMixed(rng: DeterministicRng, level: number, index: number): Math
   return { index, level, prompt: `${tail} + ${bigger} - ${smaller}`, answer: tail + bigger - smaller };
 }
 
-function threeNumberMixed(rng: DeterministicRng, level: number, index: number): MathProblem {
-  const a = rng.between(15, 99);
-  const b = rng.between(5, 39);
+function threeNumberMixed(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
+  const a = rng.between(10, ramp(29, 49, t));
+  const b = rng.between(5, ramp(19, 29, t));
   const addLast = rng.nextInt(2) === 0;
 
   if (addLast) {
     const bigger = Math.max(a, b);
     const smaller = Math.min(a, b);
-    const c = rng.between(3, 25);
+    const c = rng.between(3, ramp(9, 19, t));
     return { index, level, prompt: `${bigger} - ${smaller} + ${c}`, answer: (bigger - smaller) + c };
   }
 
-  // Bound c by a + b so a + b - c never goes negative; a + b is at least 20, so this stays >= 3.
-  const maxC = Math.min(25, a + b - 1);
+  // Bound c by a + b so a + b - c never goes negative.
+  const maxC = Math.min(ramp(9, 19, t), a + b - 1);
   const c = rng.between(3, maxC);
   return { index, level, prompt: `${a} + ${b} - ${c}`, answer: a + b - c };
 }
 
-function multiMultiplyDivide(rng: DeterministicRng, level: number, index: number): MathProblem {
-  const a = rng.between(3, 12);
+function multiMultiplyDivide(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
+  const a = rng.between(2, 9);
   const c = rng.between(2, 6);
   // Pick b as a multiple of c/gcd(a, c) so c divides (a x b) exactly, matching exactDivision's guarantee.
   const step = c / gcd(a, c);
-  const multiplier = rng.between(1, 4);
+  const multiplier = rng.between(1, ramp(2, 4, t));
   const b = step * multiplier;
   return { index, level, prompt: `(${a} × ${b}) ÷ ${c}`, answer: (a * b) / c };
 }
 
-function bossRound(rng: DeterministicRng, level: number, index: number): MathProblem {
-  const a = rng.between(12, 29);
-  const b = rng.between(4, 12);
-  const c = rng.between(3, 9);
-  const d = rng.between(10, 49);
+function bossRound(rng: DeterministicRng, level: number, index: number, t: number): MathProblem {
+  const a = rng.between(10, ramp(15, 24, t));
+  const b = rng.between(4, ramp(7, 12, t));
+  const c = rng.between(2, ramp(4, 8, t));
+  const d = rng.between(8, ramp(15, 29, t));
   // Display the larger product first so the subtraction never goes negative.
   const first = { left: a, right: b, product: a * b };
   const second = { left: c, right: d, product: c * d };

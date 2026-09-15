@@ -12,6 +12,10 @@ function evaluatePrompt(prompt: string): number {
   return Function(`"use strict"; return (${expr});`)() as number;
 }
 
+function maxOperand(prompt: string): number {
+  return Math.max(...prompt.match(/\d+/g)!.map(Number));
+}
+
 describe('generateSessionProblems', () => {
   test('is deterministic for a given seed/level/count', () => {
     for (const seed of SAMPLE_SEEDS) {
@@ -94,6 +98,24 @@ describe('generateSessionProblems', () => {
     }
   });
 
+  test('difficulty ramps up within a session: later problems use visibly larger numbers than earlier ones', () => {
+    // A generic, level-agnostic proxy (largest number appearing anywhere in the prompt), averaged
+    // over a quarter of a long session at a time, to avoid being sensitive to any single draw.
+    for (const level of ALL_LEVELS) {
+      for (const seed of SAMPLE_SEEDS) {
+        const count = 300;
+        const problems = generateSessionProblems(seed, level, count);
+        const firstQuarter = problems.slice(0, count * 0.25).map((p) => maxOperand(p.prompt));
+        const lastQuarter = problems.slice(count * 0.75).map((p) => maxOperand(p.prompt));
+        const average = (values: number[]) => values.reduce((sum, v) => sum + v, 0) / values.length;
+        assert.ok(
+          average(lastQuarter) > average(firstQuarter),
+          `level ${level} seed ${seed}: expected the session's back quarter to skew harder than its front quarter`,
+        );
+      }
+    }
+  });
+
   test('golden vectors stay pinned across refactors', () => {
     const cases: Array<{ seed: number; level: number; count: number; expected: MathProblem[] }> = [
       {
@@ -101,10 +123,10 @@ describe('generateSessionProblems', () => {
         level: 1,
         count: 5,
         expected: [
-          { index: 0, level: 1, prompt: '5 + 7', answer: 12 },
-          { index: 1, level: 1, prompt: '2 + 9', answer: 11 },
-          { index: 2, level: 1, prompt: '9 + 7', answer: 16 },
-          { index: 3, level: 1, prompt: '4 + 8', answer: 12 },
+          { index: 0, level: 1, prompt: '5 + 5', answer: 10 },
+          { index: 1, level: 1, prompt: '2 + 3', answer: 5 },
+          { index: 2, level: 1, prompt: '9 + 1', answer: 10 },
+          { index: 3, level: 1, prompt: '4 + 1', answer: 5 },
           { index: 4, level: 1, prompt: '6 + 5', answer: 11 },
         ],
       },
@@ -113,11 +135,11 @@ describe('generateSessionProblems', () => {
         level: 7,
         count: 5,
         expected: [
-          { index: 0, level: 7, prompt: '29 + 8 - 8', answer: 29 },
-          { index: 1, level: 7, prompt: '(3 × 2) + 14', answer: 20 },
-          { index: 2, level: 7, prompt: '15 + 9 - 3', answer: 21 },
-          { index: 3, level: 7, prompt: '(5 × 6) + 23', answer: 53 },
-          { index: 4, level: 7, prompt: '20 + 5 - 5', answer: 20 },
+          { index: 0, level: 7, prompt: '7 + 8 - 8', answer: 7 },
+          { index: 1, level: 7, prompt: '(3 × 2) + 11', answer: 17 },
+          { index: 2, level: 7, prompt: '17 + 9 - 3', answer: 23 },
+          { index: 3, level: 7, prompt: '(5 × 6) + 9', answer: 39 },
+          { index: 4, level: 7, prompt: '28 + 5 - 5', answer: 28 },
         ],
       },
       {
@@ -125,11 +147,11 @@ describe('generateSessionProblems', () => {
         level: 9,
         count: 5,
         expected: [
-          { index: 0, level: 9, prompt: '(3 × 2) ÷ 3', answer: 2 },
-          { index: 1, level: 9, prompt: '(3 × 4) ÷ 3', answer: 4 },
-          { index: 2, level: 9, prompt: '(5 × 1) ÷ 5', answer: 1 },
-          { index: 3, level: 9, prompt: '(6 × 4) ÷ 2', answer: 12 },
-          { index: 4, level: 9, prompt: '(12 × 4) ÷ 3', answer: 16 },
+          { index: 0, level: 9, prompt: '(8 × 6) ÷ 3', answer: 16 },
+          { index: 1, level: 9, prompt: '(4 × 6) ÷ 3', answer: 8 },
+          { index: 2, level: 9, prompt: '(6 × 15) ÷ 5', answer: 18 },
+          { index: 3, level: 9, prompt: '(7 × 8) ÷ 2', answer: 28 },
+          { index: 4, level: 9, prompt: '(5 × 12) ÷ 3', answer: 20 },
         ],
       },
       {
@@ -137,11 +159,11 @@ describe('generateSessionProblems', () => {
         level: 10,
         count: 5,
         expected: [
-          { index: 0, level: 10, prompt: '(8 × 34) - (18 × 6)', answer: 164 },
-          { index: 1, level: 10, prompt: '(28 × 5) - (9 × 11)', answer: 41 },
-          { index: 2, level: 10, prompt: '(26 × 5) - (8 × 15)', answer: 10 },
-          { index: 3, level: 10, prompt: '(9 × 41) - (26 × 9)', answer: 135 },
-          { index: 4, level: 10, prompt: '(8 × 48) - (20 × 9)', answer: 204 },
+          { index: 0, level: 10, prompt: '(10 × 4) - (3 × 8)', answer: 16 },
+          { index: 1, level: 10, prompt: '(12 × 5) - (4 × 9)', answer: 24 },
+          { index: 2, level: 10, prompt: '(12 × 4) - (2 × 13)', answer: 22 },
+          { index: 3, level: 10, prompt: '(5 × 24) - (17 × 6)', answer: 18 },
+          { index: 4, level: 10, prompt: '(7 × 20) - (12 × 9)', answer: 32 },
         ],
       },
     ];
