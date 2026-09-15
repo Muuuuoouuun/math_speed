@@ -122,24 +122,38 @@ function twoStepMixed(rng: DeterministicRng, level: number, index: number): Math
     return { index, level, prompt: `(${left} × ${right}) + ${tail}`, answer: (left * right) + tail };
   }
 
-  return { index, level, prompt: `${tail} + ${left} - ${right}`, answer: tail + left - right };
+  // tail + left - right stays non-negative for every draw (grade 1-6 math never expects signed results).
+  const bigger = Math.max(left, right);
+  const smaller = Math.min(left, right);
+  return { index, level, prompt: `${tail} + ${bigger} - ${smaller}`, answer: tail + bigger - smaller };
 }
 
 function threeNumberMixed(rng: DeterministicRng, level: number, index: number): MathProblem {
   const a = rng.between(15, 99);
   const b = rng.between(5, 39);
-  const c = rng.between(3, 25);
   const addLast = rng.nextInt(2) === 0;
-  const answer = addLast ? (a - b) + c : (a + b) - c;
-  const prompt = addLast ? `${a} - ${b} + ${c}` : `${a} + ${b} - ${c}`;
-  return { index, level, prompt, answer };
+
+  if (addLast) {
+    const bigger = Math.max(a, b);
+    const smaller = Math.min(a, b);
+    const c = rng.between(3, 25);
+    return { index, level, prompt: `${bigger} - ${smaller} + ${c}`, answer: (bigger - smaller) + c };
+  }
+
+  // Bound c by a + b so a + b - c never goes negative; a + b is at least 20, so this stays >= 3.
+  const maxC = Math.min(25, a + b - 1);
+  const c = rng.between(3, maxC);
+  return { index, level, prompt: `${a} + ${b} - ${c}`, answer: a + b - c };
 }
 
 function multiMultiplyDivide(rng: DeterministicRng, level: number, index: number): MathProblem {
   const a = rng.between(3, 12);
-  const b = rng.between(3, 12);
   const c = rng.between(2, 6);
-  return { index, level, prompt: `(${a} × ${b}) ÷ ${c}`, answer: Math.trunc((a * b) / c) };
+  // Pick b as a multiple of c/gcd(a, c) so c divides (a x b) exactly, matching exactDivision's guarantee.
+  const step = c / gcd(a, c);
+  const multiplier = rng.between(1, 4);
+  const b = step * multiplier;
+  return { index, level, prompt: `(${a} × ${b}) ÷ ${c}`, answer: (a * b) / c };
 }
 
 function bossRound(rng: DeterministicRng, level: number, index: number): MathProblem {
@@ -147,5 +161,18 @@ function bossRound(rng: DeterministicRng, level: number, index: number): MathPro
   const b = rng.between(4, 12);
   const c = rng.between(3, 9);
   const d = rng.between(10, 49);
-  return { index, level, prompt: `(${a} × ${b}) - (${c} × ${d})`, answer: (a * b) - (c * d) };
+  // Display the larger product first so the subtraction never goes negative.
+  const first = { left: a, right: b, product: a * b };
+  const second = { left: c, right: d, product: c * d };
+  const [minuend, subtrahend] = first.product >= second.product ? [first, second] : [second, first];
+  return {
+    index,
+    level,
+    prompt: `(${minuend.left} × ${minuend.right}) - (${subtrahend.left} × ${subtrahend.right})`,
+    answer: minuend.product - subtrahend.product,
+  };
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
 }
