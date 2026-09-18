@@ -40,7 +40,7 @@ describe('calculateBrainScore', () => {
   test('solving exactly at the level target yields speedRate 1 and full accuracy weighting', () => {
     const result = calculateBrainScore(
       1,
-      attempts(Array.from({ length: 5 }, () => ({ correct: true, elapsedMs: 1800 }))),
+      attempts(Array.from({ length: 5 }, () => ({ correct: true, elapsedMs: 1500 }))),
     );
     assert.equal(result.correctCount, 5);
     assert.equal(result.accuracyRate, 1);
@@ -96,8 +96,44 @@ describe('calculateBrainScore', () => {
     const pattern = attempts(Array.from({ length: 4 }, () => ({ correct: true, elapsedMs: 1600 })));
     const level1 = calculateBrainScore(1, pattern);
     const level10 = calculateBrainScore(10, pattern);
-    // Level 10 expects a faster pace (lower targetSolveMs), so the same 1600ms average reads as relatively slower there.
-    assert.ok(level1.speedRate > level10.speedRate);
+    // A boss round is allowed far longer than a single-digit sum, so the same 1600ms average is
+    // an ordinary pace at level 1 but an exceptional one at level 10.
+    assert.ok(level10.speedRate > level1.speedRate);
+  });
+
+  test('every level keeps speed a live signal rather than pinning to a clamp', () => {
+    // Each level's target is fitted to its own problem shape, so a player solving at roughly the
+    // intended pace must land strictly inside the 0.25-1.2 clamp at every level - otherwise speed
+    // stops differentiating exactly where the problems are hardest.
+    const targets = [1500, 1600, 2000, 2500, 1800, 1850, 2700, 2900, 3000, 4000];
+    targets.forEach((target, i) => {
+      const level = i + 1;
+      const atTarget = calculateBrainScore(level, attempts([{ correct: true, elapsedMs: target }]));
+      assert.equal(atTarget.speedRate, 1, `level ${level} should read exactly 1.0 at its own target pace`);
+
+      const slower = calculateBrainScore(level, attempts([{ correct: true, elapsedMs: Math.round(target * 1.4) }]));
+      assert.ok(slower.speedRate > 0.25, `level ${level} pinned to the slow clamp at 1.4x its target`);
+      assert.ok(slower.speedRate < 1, `level ${level} should read slower than target at 1.4x`);
+
+      const faster = calculateBrainScore(level, attempts([{ correct: true, elapsedMs: Math.round(target * 0.7) }]));
+      assert.ok(faster.speedRate > 1, `level ${level} should reward beating its target`);
+    });
+  });
+
+  test('harder levels pay more per correct answer at a comparable pace', () => {
+    // Fitting each level's pace to its content is what keeps this true: when every level reads a
+    // similar speedRate, difficultyWeight decides the reward, so grinding an easy level never beats
+    // playing a hard one.
+    const targets = [1500, 1600, 2000, 2500, 1800, 1850, 2700, 2900, 3000, 4000];
+    const perProblem = targets.map((target, i) =>
+      calculateBrainScore(i + 1, attempts([{ correct: true, elapsedMs: target }])).brainScore,
+    );
+    for (let i = 1; i < perProblem.length; i++) {
+      assert.ok(
+        perProblem[i] > perProblem[i - 1],
+        `level ${i + 1} should out-pay level ${i} per problem (${perProblem[i]} vs ${perProblem[i - 1]})`,
+      );
+    }
   });
 
   test('partial accuracy scales basePoints between the 0.7x and 1.0x multipliers', () => {

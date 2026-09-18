@@ -13,28 +13,33 @@ export type ScoreBreakdown = {
   correctCount: number;
 };
 
+// Each level's pace is fitted to how long its own problem shape actually takes to solve and
+// hand-write, not to the level number: a boss round legitimately takes longer than a single-digit
+// sum, so it is given longer. maxSolveMs sits ~2.3x the target so the speed multiplier stays a
+// live signal instead of pinning to its 0.25 floor. Levels 5-6 (a times-table fact) are quicker
+// than level 4 (two-digit carrying) on purpose - the fit follows the content, not the ordering.
 function levelConfig(level: number): { targetSolveMs: number; maxSolveMs: number } {
   switch (level) {
     case 1:
-      return { targetSolveMs: 1800, maxSolveMs: 4500 };
+      return { targetSolveMs: 1500, maxSolveMs: 3600 };
     case 2:
-      return { targetSolveMs: 1750, maxSolveMs: 4300 };
-    case 3:
-      return { targetSolveMs: 1700, maxSolveMs: 4200 };
-    case 4:
-      return { targetSolveMs: 1650, maxSolveMs: 4000 };
-    case 5:
       return { targetSolveMs: 1600, maxSolveMs: 3800 };
+    case 3:
+      return { targetSolveMs: 2000, maxSolveMs: 4600 };
+    case 4:
+      return { targetSolveMs: 2500, maxSolveMs: 5800 };
+    case 5:
+      return { targetSolveMs: 1800, maxSolveMs: 4200 };
     case 6:
-      return { targetSolveMs: 1550, maxSolveMs: 3600 };
+      return { targetSolveMs: 1850, maxSolveMs: 4300 };
     case 7:
-      return { targetSolveMs: 1500, maxSolveMs: 3500 };
+      return { targetSolveMs: 2700, maxSolveMs: 6200 };
     case 8:
-      return { targetSolveMs: 1450, maxSolveMs: 3400 };
+      return { targetSolveMs: 2900, maxSolveMs: 6600 };
     case 9:
-      return { targetSolveMs: 1400, maxSolveMs: 3200 };
+      return { targetSolveMs: 3000, maxSolveMs: 6900 };
     default:
-      return { targetSolveMs: 1350, maxSolveMs: 3000 };
+      return { targetSolveMs: 4000, maxSolveMs: 9000 };
   }
 }
 
