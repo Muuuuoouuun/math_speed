@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/config/season_config.dart';
 import '../domain/player_profile.dart';
 
 class ProfileRepository {
@@ -11,7 +12,7 @@ class ProfileRepository {
     FirebaseFunctions? functions,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instanceFor(region: 'asia-northeast3');
+        _functions = functions ?? FirebaseFunctions.instanceFor(region: kFunctionsRegion);
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
@@ -35,7 +36,7 @@ class ProfileRepository {
 
   Future<PlayerProfile> upsertProfile(ProfileDraft draft) async {
     final callable = _functions.httpsCallable('upsertPlayerProfile');
-    final result = await callable.call<Map<String, dynamic>>({
+    final result = await callable.call<Object?>({
       'displayName': draft.displayName,
       'schoolId': draft.schoolId,
       'regionCode': draft.regionCode,
@@ -43,7 +44,7 @@ class ProfileRepository {
     });
 
     final uid = currentUid;
-    final data = Map<String, dynamic>.from(result.data);
+    final data = Map<String, dynamic>.from(result.data! as Map);
     return PlayerProfile.fromMap(
       uid ?? (data['uid'] as String? ?? ''),
       data,

@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "brain-math-functions",
   "private": true,
   "engines": {
@@ -7,7 +7,9 @@
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "powershell -Command \"if (Test-Path lib) { Remove-Item lib -Recurse -Force }\"",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\"",
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/test/*.test.js",
+    "golden": "tsc -p tsconfig.test.json && node .test-build/scripts/golden.js",
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "npm run build && firebase deploy --only functions"
   },
@@ -16,6 +18,7 @@
     "firebase-functions": "^6.0.1"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "typescript": "^5.6.3"
   }
 }

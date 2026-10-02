@@ -1,4 +1,4 @@
-﻿import { randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -18,13 +18,15 @@ import {
   ACTIVE_SEASON_ID,
   APP_REGION,
   BALANCE_VERSION,
-  DEFAULT_PROBLEM_COUNT,
+  CLOCK_SKEW_SLACK_MS,
   ELIGIBILITY_ATTEMPTS,
   LEADERBOARD_LIMIT,
+  MAX_ANSWERS_PER_ROUND,
   SESSION_TTL_MINUTES,
+  SUBMIT_LATENCY_SLACK_MS,
+  TIMEOUT_GRACE_MS,
 } from './config';
-import { generateSessionProblems } from './mathEngine';
-import { calculateBrainScore } from './scoring';
+import { isGameMode, replayRound, type GameMode } from './gameEngine';
 
 initializeApp();
 setGlobalOptions({ region: APP_REGION, maxInstances: 20, memory: '256MiB' });
@@ -44,14 +46,14 @@ type UserProfile = {
 type RankedSessionStored = {
   uid: string;
   seasonId: string;
-  level: number;
+  mode: GameMode;
   levelBucket: string;
   seed: number;
-  problemCount: number;
   balanceVersion: string;
   status: 'issued' | 'consumed';
   schoolIdSnapshot: string;
   regionCodeSnapshot: string;
+  issuedAt: Timestamp;
   expiresAt: Timestamp;
   attemptId?: string;
 };
@@ -89,31 +91,6 @@ function assertAuthenticated(auth: unknown): { uid: string } {
   }
 
   return { uid: String((auth as { uid: string }).uid) };
-}
-
-function normalizeAnswer(value: string | undefined): string {
-  return (value ?? '').replace(/\s+/g, '').replace(/[^\d-]/g, '');
-}
-
-function problemCountForLevel(level: number): number {
-  switch (level) {
-    case 1:
-    case 2:
-      return 10;
-    case 3:
-    case 4:
-      return 12;
-    case 5:
-    case 6:
-      return 14;
-    case 7:
-    case 8:
-      return 16;
-    case 9:
-      return 18;
-    default:
-      return 20;
-  }
 }
 
 function aggregateId(scope: string, entityId: string, seasonId: string, levelBucket: string): string {
@@ -188,6 +165,7 @@ function applyAggregateWrites(options: {
   const nextAttempts = previousAttempts + 1;
   const nextEligible = nextAttempts >= ELIGIBILITY_ATTEMPTS;
   const nextBest = Math.max(previousBest, score);
+  const improved = !prepared.bestSnap.exists || score > previousBest;
 
   tx.set(
     prepared.bestRef,
@@ -198,7 +176,7 @@ function applyAggregateWrites(options: {
       schoolId,
       regionCode,
       bestBrainScore: nextBest,
-      bestAttemptId: attemptId,
+      ...(improved ? { bestAttemptId: attemptId } : {}),
       qualifyingAttempts: nextAttempts,
       updatedAt: FieldValue.serverTimestamp(),
     },
@@ -248,31 +226,26 @@ function applyAggregateWrites(options: {
 
 export const createRankedSession = onCall(async (request) => {
   const { uid } = assertAuthenticated(request.auth);
-  const level = Number(request.data?.level ?? 1);
-  if (!Number.isInteger(level) || level < 1 || level > 10) {
-    throw new HttpsError('invalid-argument', 'level must be an integer between 1 and 10.');
-  }
-
-  const requestedProblemCount = Number(request.data?.problemCount ?? problemCountForLevel(level) ?? DEFAULT_PROBLEM_COUNT);
-  if (!Number.isInteger(requestedProblemCount) || requestedProblemCount < 5 || requestedProblemCount > 30) {
-    throw new HttpsError('invalid-argument', 'problemCount must be between 5 and 30.');
+  const mode = request.data?.mode;
+  if (!isGameMode(mode)) {
+    throw new HttpsError('invalid-argument', 'mode must be one of the supported game modes.');
   }
 
   const profile = await getRequiredUserProfile(uid);
   const sessionRef = db.collection('ranked_sessions').doc();
-  const expiresAt = Timestamp.fromMillis(Date.now() + (SESSION_TTL_MINUTES * 60 * 1000));
-  const sessionDoc = {
+  const issuedAt = Timestamp.now();
+  const expiresAt = Timestamp.fromMillis(issuedAt.toMillis() + (SESSION_TTL_MINUTES * 60 * 1000));
+  const sessionDoc: RankedSessionStored = {
     uid,
     seasonId: ACTIVE_SEASON_ID,
-    level,
-    levelBucket: `level-${level}`,
+    mode,
+    levelBucket: mode,
     seed: randomInt(1, 0x7fffffff),
-    problemCount: requestedProblemCount,
     balanceVersion: BALANCE_VERSION,
     status: 'issued',
     schoolIdSnapshot: String(profile.schoolId),
     regionCodeSnapshot: String(profile.regionCode),
-    issuedAt: FieldValue.serverTimestamp(),
+    issuedAt,
     expiresAt,
   };
 
@@ -282,9 +255,8 @@ export const createRankedSession = onCall(async (request) => {
     sessionId: sessionRef.id,
     seasonId: ACTIVE_SEASON_ID,
     seed: sessionDoc.seed,
-    level,
+    mode,
     levelBucket: sessionDoc.levelBucket,
-    problemCount: requestedProblemCount,
     expiresAt: expiresAt.toMillis(),
     balanceVersion: BALANCE_VERSION,
   };
@@ -296,6 +268,9 @@ export const submitRankedSession = onCall(async (request) => {
   const answers = Array.isArray(request.data?.answers) ? (request.data.answers as SubmitAnswer[]) : [];
   if (!sessionId) {
     throw new HttpsError('invalid-argument', 'sessionId is required.');
+  }
+  if (answers.length > MAX_ANSWERS_PER_ROUND) {
+    throw new HttpsError('invalid-argument', `answers must not exceed ${MAX_ANSWERS_PER_ROUND}.`);
   }
 
   const sessionRef = db.collection('ranked_sessions').doc(sessionId);
@@ -320,98 +295,110 @@ export const submitRankedSession = onCall(async (request) => {
     if (session.status !== 'issued') {
       throw new HttpsError('failed-precondition', 'This ranked session has already been submitted.');
     }
-    if (session.expiresAt.toMillis() < Date.now()) {
+    if (session.balanceVersion !== BALANCE_VERSION || !isGameMode(session.mode)) {
+      throw new HttpsError('failed-precondition', 'This ranked session was issued for an older game balance.');
+    }
+    const nowMs = Date.now();
+    if (session.expiresAt.toMillis() < nowMs) {
       throw new HttpsError('deadline-exceeded', 'This ranked session has expired.');
     }
     if (!profile.schoolId || !profile.regionCode) {
       throw new HttpsError('failed-precondition', 'schoolId and regionCode are required for ranked play.');
     }
-    if (answers.length !== session.problemCount) {
-      throw new HttpsError('invalid-argument', 'answers length must match problemCount.');
-    }
 
-    const [levelAggregateState, allAggregateState] = await Promise.all([
-      prepareAggregateState({
-        tx,
-        uid,
-        seasonId: session.seasonId,
-        levelBucket: session.levelBucket,
-        schoolId: String(profile.schoolId),
-        regionCode: String(profile.regionCode),
-      }),
-      prepareAggregateState({
-        tx,
-        uid,
-        seasonId: session.seasonId,
-        levelBucket: 'all',
-        schoolId: String(profile.schoolId),
-        regionCode: String(profile.regionCode),
-      }),
-    ]);
-
-    const problems = generateSessionProblems(session.seed, session.level, session.problemCount);
-    const perProblem = problems.map((problem, index) => {
-      const answer = answers[index] ?? {};
-      const elapsedMs = Math.min(99999, Math.max(250, Number(answer.elapsedMs ?? 0)));
-      const normalizedAnswer = normalizeAnswer(answer.text);
-      return {
-        i: index,
-        ok: normalizedAnswer === String(problem.answer),
-        ms: elapsedMs,
-        recognized: normalizedAnswer,
-        expected: String(problem.answer),
-      };
+    // 클라이언트가 보낸 문제별 소요 시간으로 타이머를 다시 돌려, 시간 초과 이후 답안은 버립니다.
+    const replay = replayRound({
+      seed: session.seed,
+      mode: session.mode,
+      answers: answers.map((answer) => ({
+        text: String(answer?.text ?? ''),
+        elapsedMs: Number(answer?.elapsedMs ?? 0),
+      })),
+      timeoutGraceMs: TIMEOUT_GRACE_MS,
     });
+    const score = replay.score;
 
-    const score = calculateBrainScore(
-      session.level,
-      perProblem.map((item) => ({ correct: item.ok, elapsedMs: item.ms })),
-    );
+    // 실제 경과 시간과 재생된 라운드 길이가 크게 어긋나면 랭킹에서 제외하고 기록만 남깁니다.
+    const wallClockMs = nowMs - session.issuedAt.toMillis();
+    const flagReasons: string[] = [];
+    if (wallClockMs + CLOCK_SKEW_SLACK_MS < replay.roundDurationMs) {
+      flagReasons.push('finished_faster_than_clock');
+    }
+    if (wallClockMs > replay.roundDurationMs + SUBMIT_LATENCY_SLACK_MS) {
+      flagReasons.push('round_longer_than_reported');
+    }
+    if (replay.droppedAfterTimeout > 0) {
+      flagReasons.push('answers_after_timeout');
+    }
+    // 시간 초과 답안이 몇 개 섞인 것만으로는 랭킹에서 제외하지 않습니다 (해당 답안만 버림).
+    const flagged = flagReasons.some((reason) => reason !== 'answers_after_timeout');
+
+    const [levelAggregateState, allAggregateState] = flagged
+      ? [null, null]
+      : await Promise.all([
+          prepareAggregateState({
+            tx,
+            uid,
+            seasonId: session.seasonId,
+            levelBucket: session.levelBucket,
+            schoolId: String(profile.schoolId),
+            regionCode: String(profile.regionCode),
+          }),
+          prepareAggregateState({
+            tx,
+            uid,
+            seasonId: session.seasonId,
+            levelBucket: 'all',
+            schoolId: String(profile.schoolId),
+            regionCode: String(profile.regionCode),
+          }),
+        ]);
 
     tx.set(attemptRef, {
       uid,
       sessionId,
       seasonId: session.seasonId,
-      level: session.level,
+      mode: session.mode,
       levelBucket: session.levelBucket,
+      balanceVersion: session.balanceVersion,
       brainScore: score.brainScore,
       accuracyRate: score.accuracyRate,
       speedRate: score.speedRate,
+      correctPerMinute: score.correctPerMinute,
       comboMax: score.comboMax,
       comboBonus: score.comboBonus,
       correctCount: score.correctCount,
-      problemStats: perProblem,
+      attemptCount: score.attemptCount,
+      problemStats: replay.problems,
+      roundDurationMs: replay.roundDurationMs,
+      wallClockMs,
+      droppedAfterTimeout: replay.droppedAfterTimeout,
+      flagged,
+      flagReasons,
       recognizedSummary: {
-        strokeCount: answers.reduce((sum, answer) => sum + Number(answer.strokeCount ?? 0), 0),
-        pointCount: answers.reduce((sum, answer) => sum + Number(answer.pointCount ?? 0), 0),
-        inkHashes: answers.map((answer) => answer.inkHash).filter(Boolean),
+        strokeCount: answers.reduce((sum, answer) => sum + Number(answer?.strokeCount ?? 0), 0),
+        pointCount: answers.reduce((sum, answer) => sum + Number(answer?.pointCount ?? 0), 0),
+        inkHashes: answers.map((answer) => answer?.inkHash).filter(Boolean),
       },
       schoolIdSnapshot: profile.schoolId,
       regionCodeSnapshot: profile.regionCode,
       submittedAt: FieldValue.serverTimestamp(),
     });
 
-    applyAggregateWrites({
-      tx,
-      prepared: levelAggregateState,
-      uid,
-      seasonId: session.seasonId,
-      schoolId: String(profile.schoolId),
-      regionCode: String(profile.regionCode),
-      score: score.brainScore,
-      attemptId: attemptRef.id,
-    });
-
-    applyAggregateWrites({
-      tx,
-      prepared: allAggregateState,
-      uid,
-      seasonId: session.seasonId,
-      schoolId: String(profile.schoolId),
-      regionCode: String(profile.regionCode),
-      score: score.brainScore,
-      attemptId: attemptRef.id,
-    });
+    if (levelAggregateState && allAggregateState) {
+      for (const prepared of [levelAggregateState, allAggregateState]) {
+        applyAggregateWrites({
+          tx,
+          prepared,
+          uid,
+          seasonId: session.seasonId,
+          schoolId: String(profile.schoolId),
+          regionCode: String(profile.regionCode),
+          score: score.brainScore,
+          attemptId: attemptRef.id,
+        });
+      }
+    }
 
     tx.set(
       sessionRef,
@@ -423,11 +410,13 @@ export const submitRankedSession = onCall(async (request) => {
       { merge: true },
     );
 
+    const previousSeasonBest = Number(profile.currentSeasonBest ?? 0);
+    const seasonBest = flagged ? previousSeasonBest : Math.max(previousSeasonBest, score.brainScore);
     tx.set(
       userRef,
       {
-        currentSeasonBest: Math.max(Number(profile.currentSeasonBest ?? 0), score.brainScore),
-        personalBestOverall: Math.max(Number(profile.personalBestOverall ?? 0), score.brainScore),
+        currentSeasonBest: seasonBest,
+        personalBestOverall: Math.max(Number(profile.personalBestOverall ?? 0), seasonBest),
         lastSeenAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -439,6 +428,10 @@ export const submitRankedSession = onCall(async (request) => {
       accuracyRate: score.accuracyRate,
       comboMax: score.comboMax,
       correctCount: score.correctCount,
+      attemptCount: score.attemptCount,
+      seasonBest,
+      isNewBest: !flagged && score.brainScore > previousSeasonBest,
+      flagged,
     };
   });
 });
@@ -525,8 +518,16 @@ export const rebuildLeaderboardSnapshots = onSchedule('every 15 minutes', async 
       .orderBy('avgBestBrainScore', 'desc')
       .limit(LEADERBOARD_LIMIT);
 
-    const aggregateSnap = await query.get();
+    const [aggregateSnap, previousEntriesSnap] = await Promise.all([
+      query.get(),
+      snapshotRef.collection('entries').get(),
+    ]);
     const batch = db.batch();
+    // 상위권에서 밀려난 항목이 예전 순위로 남아 있지 않도록 이번 집계에 없는 항목은 지웁니다.
+    const nextEntityIds = new Set(aggregateSnap.docs.map((doc) => String(doc.data().entityId)));
+    previousEntriesSnap.docs
+      .filter((doc) => !nextEntityIds.has(doc.id))
+      .forEach((doc) => batch.delete(doc.ref));
     batch.set(snapshotRef, {
       generatedAt: FieldValue.serverTimestamp(),
       snapshotId,

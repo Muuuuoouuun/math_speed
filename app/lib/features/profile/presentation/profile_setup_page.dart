@@ -51,7 +51,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     final trimmedName = _nameController.text.trim();
     if (trimmedName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ÀÌ¸§ÀÌ³ª ´Ğ³×ÀÓÀ» ÀÔ·ÂÇØ ÁÖ¼¼¿ä.')),
+        const SnackBar(content: Text('ì´ë¦„ì´ë‚˜ ë‹‰ë„¤ì„ì„ ì…ë ¥í•´ ì£¼ì„¸ìš”.')),
       );
       return;
     }
@@ -62,7 +62,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       regionCode: _regionCode ?? '',
       grade: _grade,
     );
-    await widget.onSubmit(draft);
+    try {
+      await widget.onSubmit(draft);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('í”„ë¡œí•„ì„ ì €ì¥í•˜ì§€ ëª»í–ˆì–´ìš”. ë„¤íŠ¸ì›Œí¬ë¥¼ í™•ì¸í•˜ê³  ë‹¤ì‹œ ì‹œë„í•´ ì£¼ì„¸ìš”.')),
+      );
+    }
   }
 
   @override
@@ -79,20 +86,20 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ÇĞ½À ÇÁ·ÎÇÊ', style: theme.textTheme.headlineMedium),
+                  Text('í•™ìŠµ í”„ë¡œí•„', style: theme.textTheme.headlineMedium),
                   const SizedBox(height: 8),
                   Text(
-                    'ÇĞ±³ ´ëÇ×Àü°ú Áö¿ª ±â·ÏÀü¿¡ Âü¿©ÇÏ·Á¸é ±âº» Á¤º¸¸¦ ¸ÕÀú Àû¾î ÁÖ¼¼¿ä.',
+                    'í•™êµ ëŒ€í•­ì „ê³¼ ì§€ì—­ ê¸°ë¡ì „ì— ì°¸ì—¬í•˜ë ¤ë©´ ê¸°ë³¸ ì •ë³´ë¥¼ ë¨¼ì € ì ì–´ ì£¼ì„¸ìš”.',
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
-                  Wrap(
+                  const Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: const [
-                      _IntroChip(label: 'ÇĞ±³ ·©Å· Âü¿©'),
-                      _IntroChip(label: 'Áö¿ª ±â·Ï ºñ±³'),
-                      _IntroChip(label: '°³ÀÎ ÃÖ°í ±â·Ï ÀúÀå'),
+                    children: [
+                      _IntroChip(label: 'í•™êµ ë­í‚¹ ì°¸ì—¬'),
+                      _IntroChip(label: 'ì§€ì—­ ê¸°ë¡ ë¹„êµ'),
+                      _IntroChip(label: 'ê°œì¸ ìµœê³  ê¸°ë¡ ì €ì¥'),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -121,7 +128,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                               border: Border.all(color: const Color(0xFFE4DED1)),
                             ),
                             child: Text(
-                              '´Ğ³×ÀÓÀº ¸®´õº¸µå¿Í °á°ú È­¸é¿¡ Ç¥½ÃµË´Ï´Ù. ½Ç¸í ´ë½Å º°¸íÀ» »ç¿ëÇØµµ ±¦Âú¾Æ¿ä.',
+                              'ë‹‰ë„¤ì„ì€ ë¦¬ë”ë³´ë“œì™€ ê²°ê³¼ í™”ë©´ì— í‘œì‹œë©ë‹ˆë‹¤. ì‹¤ëª… ëŒ€ì‹  ë³„ëª…ì„ ì‚¬ìš©í•´ë„ ê´œì°®ì•„ìš”.',
                               style: theme.textTheme.bodyMedium,
                             ),
                           ),
@@ -129,12 +136,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           TextField(
                             controller: _nameController,
                             textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'ÀÌ¸§ ¶Ç´Â ´Ğ³×ÀÓ'),
+                            decoration: const InputDecoration(labelText: 'ì´ë¦„ ë˜ëŠ” ë‹‰ë„¤ì„'),
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
+                            // ì§€ì—­ì„ ë°”ê¾¸ë©´ í•™êµ ê°’ì„ ì½”ë“œì—ì„œ ë‹¤ì‹œ ì§€ì •í•´ì•¼ í•˜ë¯€ë¡œ ì œì–´í˜• `value`ë¥¼ ìœ ì§€í•©ë‹ˆë‹¤.
+                            // ignore: deprecated_member_use
                             value: _regionCode,
-                            decoration: const InputDecoration(labelText: 'Áö¿ª'),
+                            decoration: const InputDecoration(labelText: 'ì§€ì—­'),
                             items: kRegionOptions
                                 .map(
                                   (region) => DropdownMenuItem<String>(
@@ -156,8 +165,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
+                            // ignore: deprecated_member_use
                             value: _schoolId,
-                            decoration: const InputDecoration(labelText: 'ÇĞ±³'),
+                            decoration: const InputDecoration(labelText: 'í•™êµ'),
                             items: _selectedRegion.schools
                                 .map(
                                   (school) => DropdownMenuItem<String>(
@@ -177,13 +187,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<int>(
+                            // ignore: deprecated_member_use
                             value: _grade,
-                            decoration: const InputDecoration(labelText: 'ÇĞ³â'),
+                            decoration: const InputDecoration(labelText: 'í•™ë…„'),
                             items: List<DropdownMenuItem<int>>.generate(
                               6,
                               (index) => DropdownMenuItem<int>(
                                 value: index + 1,
-                                child: Text('${index + 1}ÇĞ³â'),
+                                child: Text('${index + 1}í•™ë…„'),
                               ),
                             ),
                             onChanged: widget.isBusy
@@ -198,7 +209,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           const SizedBox(height: 22),
                           FilledButton(
                             onPressed: widget.isBusy ? null : _submit,
-                            child: Text(widget.isBusy ? 'ÀúÀå Áß...' : '°ÔÀÓ ½ÃÀÛÇÏ±â'),
+                            child: Text(widget.isBusy ? 'ì €ì¥ ì¤‘...' : 'ê²Œì„ ì‹œì‘í•˜ê¸°'),
                           ),
                         ],
                       ),

@@ -1,5 +1,6 @@
-﻿import 'package:google_mlkit_digital_ink_recognition/google_mlkit_digital_ink_recognition.dart';
+import 'package:google_mlkit_digital_ink_recognition/google_mlkit_digital_ink_recognition.dart';
 
+import '../../game/domain/answer_normalizer.dart';
 import '../domain/ink_models.dart';
 
 class RecognitionPreview {
@@ -23,14 +24,11 @@ class DigitalInkService {
   DigitalInkRecognizer? _recognizer;
 
   Future<void> ensureModelDownloaded() async {
-    final model = DigitalInkRecognitionModel(languageCode: _languageCode);
-    final isDownloaded = await _modelManager.isModelDownloaded(model);
-    if (isDownloaded) {
-      _recognizer ??= DigitalInkRecognizer(languageCode: _languageCode);
-      return;
+    final isDownloaded = await _modelManager.isModelDownloaded(_languageCode);
+    if (!isDownloaded) {
+      // 학교 기기는 셀룰러/와이파이 구분 없이 쓰는 경우가 많아 와이파이 제한을 두지 않습니다.
+      await _modelManager.downloadModel(_languageCode, isWifiRequired: false);
     }
-
-    await _modelManager.downloadModel(model);
     _recognizer ??= DigitalInkRecognizer(languageCode: _languageCode);
   }
 
@@ -73,7 +71,11 @@ class DigitalInkService {
       return null;
     }
 
-    final best = candidates.first;
+    // 후보는 신뢰도 순으로 오므로, 숫자로 읽히는 첫 후보를 고릅니다. (예: 'l0' 대신 '10')
+    final best = candidates.firstWhere(
+      (candidate) => normalizeAnswer(candidate.text).isNotEmpty,
+      orElse: () => candidates.first,
+    );
     return RecognitionPreview(
       text: best.text,
       score: best.score,

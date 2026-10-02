@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../domain/ink_models.dart';
 
@@ -19,6 +19,8 @@ class InkCanvas extends StatefulWidget {
 class _InkCanvasState extends State<InkCanvas> {
   final List<InkStrokeData> _strokes = <InkStrokeData>[];
   List<InkPointData> _activePoints = <InkPointData>[];
+  // 스트로크 목록과 진행 중인 획은 제자리에서 바뀌므로, 다시 그릴지 여부는 이 값으로 판단합니다.
+  int _paintRevision = 0;
 
   @override
   void didUpdateWidget(covariant InkCanvas oldWidget) {
@@ -26,47 +28,55 @@ class _InkCanvasState extends State<InkCanvas> {
     if (oldWidget.clearRevision != widget.clearRevision) {
       _strokes.clear();
       _activePoints = <InkPointData>[];
+      _paintRevision++;
     }
   }
 
   void _beginStroke(DragStartDetails details) {
     final box = context.findRenderObject() as RenderBox?;
     final localPosition = box?.globalToLocal(details.globalPosition) ?? Offset.zero;
-    _activePoints = <InkPointData>[
-      InkPointData(
-        x: localPosition.dx,
-        y: localPosition.dy,
-        t: DateTime.now().millisecondsSinceEpoch,
-      ),
-    ];
-    setState(() {});
+    setState(() {
+      _activePoints = <InkPointData>[
+        InkPointData(
+          x: localPosition.dx,
+          y: localPosition.dy,
+          t: DateTime.now().millisecondsSinceEpoch,
+        ),
+      ];
+      _paintRevision++;
+    });
   }
 
   void _appendPoint(DragUpdateDetails details) {
     final box = context.findRenderObject() as RenderBox?;
     final localPosition = box?.globalToLocal(details.globalPosition) ?? Offset.zero;
-    _activePoints = <InkPointData>[
-      ..._activePoints,
-      InkPointData(
-        x: localPosition.dx,
-        y: localPosition.dy,
-        t: DateTime.now().millisecondsSinceEpoch,
-      ),
-    ];
-    setState(() {});
+    setState(() {
+      _activePoints.add(
+        InkPointData(
+          x: localPosition.dx,
+          y: localPosition.dy,
+          t: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      _paintRevision++;
+    });
   }
 
   void _endStroke([DragEndDetails? _]) {
     if (_activePoints.length < 2) {
-      _activePoints = <InkPointData>[];
-      setState(() {});
+      setState(() {
+        _activePoints = <InkPointData>[];
+        _paintRevision++;
+      });
       return;
     }
 
-    _strokes.add(InkStrokeData(points: List<InkPointData>.unmodifiable(_activePoints)));
-    _activePoints = <InkPointData>[];
+    setState(() {
+      _strokes.add(InkStrokeData(points: List<InkPointData>.unmodifiable(_activePoints)));
+      _activePoints = <InkPointData>[];
+      _paintRevision++;
+    });
     widget.onInkChanged(List<InkStrokeData>.unmodifiable(_strokes));
-    setState(() {});
   }
 
   @override
@@ -81,6 +91,7 @@ class _InkCanvasState extends State<InkCanvas> {
           painter: _InkPainter(
             strokes: _strokes,
             previewStroke: previewStroke,
+            revision: _paintRevision,
           ),
           size: Size.infinite,
         ),
@@ -93,10 +104,12 @@ class _InkPainter extends CustomPainter {
   const _InkPainter({
     required this.strokes,
     required this.previewStroke,
+    required this.revision,
   });
 
   final List<InkStrokeData> strokes;
   final InkStrokeData? previewStroke;
+  final int revision;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -158,6 +171,6 @@ class _InkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _InkPainter oldDelegate) {
-    return oldDelegate.strokes != strokes || oldDelegate.previewStroke != previewStroke;
+    return oldDelegate.revision != revision;
   }
 }

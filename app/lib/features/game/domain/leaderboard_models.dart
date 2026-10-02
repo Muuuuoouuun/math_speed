@@ -1,4 +1,14 @@
-﻿class LeaderboardEntry {
+enum LeaderboardScope {
+  school('school', '학교'),
+  region('region', '지역');
+
+  const LeaderboardScope(this.id, this.label);
+
+  final String id;
+  final String label;
+}
+
+class LeaderboardEntry {
   const LeaderboardEntry({
     required this.rank,
     required this.entityId,

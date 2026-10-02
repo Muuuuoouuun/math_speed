@@ -1,5 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/config/season_config.dart';
 import '../domain/leaderboard_models.dart';
 
 class LeaderboardRepository {
@@ -8,13 +9,11 @@ class LeaderboardRepository {
   }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
-  static const _seasonId = '2026_s1';
-
   Future<List<LeaderboardEntry>> loadTopEntries({
-    required String scope,
+    required LeaderboardScope scope,
     int limit = 5,
   }) async {
-    final snapshotId = '${_seasonId}_${scope}_all_latest';
+    final snapshotId = '${kActiveSeasonId}_${scope.id}_all_latest';
     final query = await _firestore
         .collection('leaderboard_snapshots')
         .doc(snapshotId)

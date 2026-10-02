@@ -9,8 +9,14 @@ import '../../ink/presentation/ink_canvas.dart';
 import '../../profile/domain/player_profile.dart';
 import '../../profile/domain/profile_catalog.dart';
 import '../application/game_session_controller.dart';
+import '../data/leaderboard_repository.dart';
+import '../data/ranked_session_repository.dart';
 import '../domain/brain_score.dart';
 import '../domain/game_mode.dart';
+import '../domain/ranked_models.dart';
+import 'leaderboard_panel.dart';
+import 'paper_widgets.dart';
+import 'ranked_status_panel.dart';
 
 class BrainTrainingPage extends StatefulWidget {
   const BrainTrainingPage({
@@ -29,23 +35,48 @@ class BrainTrainingPage extends StatefulWidget {
 }
 
 class _BrainTrainingPageState extends State<BrainTrainingPage> {
-  final GameSessionController _controller = GameSessionController();
+  late final GameSessionController _controller;
   final DigitalInkService _digitalInkService = DigitalInkService(languageCode: 'ko');
   final TextEditingController _fallbackController = TextEditingController();
+  LeaderboardRepository? _leaderboardRepository;
   Timer? _recognitionDebounce;
+  RankedRoundStatus _lastRankedStatus = RankedRoundStatus.idle;
+  int _leaderboardRefreshToken = 0;
+
+  bool get _canPlayRanked => widget.environment.firebaseReady && (widget.profile?.isComplete ?? false);
 
   @override
   void initState() {
     super.initState();
+    _controller = GameSessionController(
+      rankedGateway: _canPlayRanked ? RankedSessionRepository() : null,
+    );
+    if (widget.environment.firebaseReady) {
+      _leaderboardRepository = LeaderboardRepository();
+    }
+    _controller.addListener(_handleControllerChanged);
     _controller.startRound(mode: GameMode.simpleCalculation);
     unawaited(_warmupModel());
+  }
+
+  void _handleControllerChanged() {
+    final status = _controller.rankedStatus;
+    if (status == _lastRankedStatus) return;
+    _lastRankedStatus = status;
+    if (status == RankedRoundStatus.submitted) {
+      // ì‹œì¦Œ ìµœê³  ê¸°ë¡ê³¼ ë­í‚¹ì´ ë°”ë€Œì—ˆì„ ìˆ˜ ìˆìœ¼ë‹ˆ ë‹¤ì‹œ ë¶ˆëŸ¬ì˜µë‹ˆë‹¤.
+      unawaited(widget.onProfileUpdated?.call());
+      setState(() {
+        _leaderboardRefreshToken++;
+      });
+    }
   }
 
   Future<void> _warmupModel() async {
     try {
       await _digitalInkService.ensureModelDownloaded();
     } catch (_) {
-      // ¸ğµ¨ ´Ù¿î·Îµå¿¡ ½ÇÆĞÇØµµ ¼öµ¿ ÀÔ·ÂÀ¸·Î ²÷±è ¾øÀÌ ÇÃ·¹ÀÌÇÒ ¼ö ÀÖ°Ô µÓ´Ï´Ù.
+      // ëª¨ë¸ ë‹¤ìš´ë¡œë“œì— ì‹¤íŒ¨í•´ë„ ìˆ˜ë™ ì…ë ¥ìœ¼ë¡œ ëŠê¹€ ì—†ì´ í”Œë ˆì´í•  ìˆ˜ ìˆê²Œ ë‘¡ë‹ˆë‹¤.
     }
   }
 
@@ -53,26 +84,27 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
   void dispose() {
     _recognitionDebounce?.cancel();
     _fallbackController.dispose();
+    _controller.removeListener(_handleControllerChanged);
     _controller.dispose();
     unawaited(_digitalInkService.dispose());
     super.dispose();
   }
 
   Future<void> _handleInkChanged(List<InkStrokeData> strokes) async {
-    final pointCount = strokes.fold<int>(0, (sum, stroke) => sum + stroke.points.length);
-    _controller.updateInkMetrics(
-      InkMetrics(
-        strokeCount: strokes.length,
-        pointCount: pointCount,
-      ),
-    );
+    _controller.updateInkMetrics(InkMetrics.fromStrokes(strokes));
 
     _recognitionDebounce?.cancel();
+    final revision = _controller.clearRevision;
     _recognitionDebounce = Timer(const Duration(milliseconds: 90), () async {
-      // Optimization: ¼Õ±Û¾¾ ÀÎ½ÄÀº ½ºÆ®·ÎÅ©¸¶´Ù ¹Ù·Î ºÎ¸£¸é ÇÃ·§Æû Ã¤³Î ¿Õº¹ÀÌ ´©ÀûµÇ¹Ç·Î ÂªÀº debounce·Î Áö¿¬°ú ¹èÅÍ¸®¸¦ ÇÔ²² ÁÙÀÔ´Ï´Ù.
-      final preview = await _digitalInkService.recognize(strokes);
-      if (!mounted || preview == null) return;
-      _controller.updateRecognitionPreview(preview.text);
+      // Optimization: ì†ê¸€ì”¨ ì¸ì‹ì€ ìŠ¤íŠ¸ë¡œí¬ë§ˆë‹¤ ë°”ë¡œ ë¶€ë¥´ë©´ í”Œë«í¼ ì±„ë„ ì™•ë³µì´ ëˆ„ì ë˜ë¯€ë¡œ ì§§ì€ debounceë¡œ ì§€ì—°ê³¼ ë°°í„°ë¦¬ë¥¼ í•¨ê»˜ ì¤„ì…ë‹ˆë‹¤.
+      try {
+        final preview = await _digitalInkService.recognize(strokes);
+        // ì¸ì‹ ì¤‘ì— ë‹¤ìŒ ë¬¸ì œë¡œ ë„˜ì–´ê°”ê±°ë‚˜ ì‰í¬ë¥¼ ì§€ì› ë‹¤ë©´ ì´ì „ ê²°ê³¼ëŠ” ë²„ë¦½ë‹ˆë‹¤.
+        if (!mounted || preview == null || revision != _controller.clearRevision) return;
+        _controller.updateRecognitionPreview(preview.text);
+      } catch (_) {
+        // ì¸ì‹ê¸°ë¥¼ ì“¸ ìˆ˜ ì—†ëŠ” ê¸°ê¸°ì—ì„œëŠ” ìˆ˜ë™ ì…ë ¥ìœ¼ë¡œ ê³„ì† ì§„í–‰í•©ë‹ˆë‹¤.
+      }
     });
   }
 
@@ -81,6 +113,11 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
     if (submitted) {
       _fallbackController.clear();
     }
+  }
+
+  void _restart() {
+    _fallbackController.clear();
+    _controller.restart();
   }
 
   @override
@@ -96,11 +133,13 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
         final progress = (_controller.timeLeftMs / _controller.gameModeConfig.maxTimeMs).clamp(0.0, 1.0);
         final lastAttemptCorrect = _controller.lastAttemptCorrect;
         final hasFeedback = lastAttemptCorrect != null && !_controller.isGameOver;
-        final feedbackTitle = lastAttemptCorrect == true ? 'Âü ÀßÇß¾î¿ä' : '´ÙÀ½ ¹®Á¦·Î ÀÌ¾î°¡¿ä';
+        final feedbackTitle = lastAttemptCorrect == true ? 'ì°¸ ì˜í–ˆì–´ìš”' : 'ë‹¤ìŒ ë¬¸ì œë¡œ ì´ì–´ê°€ìš”';
         final feedbackBody = lastAttemptCorrect == true
-            ? '+${(_controller.lastBonusAwardedMs / 1000).toStringAsFixed(1)}ÃÊ º¸³Ê½º°¡ Ãß°¡µÆ¾î¿ä'
-            : 'Á¤´äÀº ${_controller.lastExpectedAnswer ?? '-'}¿´¾î¿ä';
-        final submittedLabel = _controller.lastSubmittedAnswer.isEmpty ? 'ÀÔ·Â ¾øÀ½' : _controller.lastSubmittedAnswer;
+            ? '+${(_controller.lastBonusAwardedMs / 1000).toStringAsFixed(1)}ì´ˆ ë³´ë„ˆìŠ¤ê°€ ì¶”ê°€ëì–´ìš”'
+            : 'ì •ë‹µì€ ${_controller.lastExpectedAnswer ?? '-'}ì˜€ì–´ìš”';
+        final submittedLabel = _controller.lastSubmittedAnswer.isEmpty ? 'ì…ë ¥ ì—†ìŒ' : _controller.lastSubmittedAnswer;
+        // ê³µì‹ ì±„ì  ì¤‘ì— ëª¨ë“œë¥¼ ë°”ê¾¸ë©´ ê²°ê³¼ë¥¼ ë†“ì¹˜ë¯€ë¡œ ì ì‹œ ì ê¸‰ë‹ˆë‹¤.
+        final modeLocked = _controller.rankedStatus == RankedRoundStatus.submitting;
 
         return Scaffold(
           body: SafeArea(
@@ -114,10 +153,10 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('¿¬ÇÊ °è»ê', style: theme.textTheme.headlineMedium),
+                          Text('ì—°í•„ ê³„ì‚°', style: theme.textTheme.headlineMedium),
                           const SizedBox(height: 6),
                           Text(
-                            '½Ã°£ ¾È¿¡ ÃÖ´ëÇÑ ¸¹ÀÌ ¸ÂÈ÷°í, Á¤´ä¸¶´Ù ³²Àº ½Ã°£À» Á¶±İ¾¿ µÇÃ£¾Æ º¸¼¼¿ä.',
+                            'ì‹œê°„ ì•ˆì— ìµœëŒ€í•œ ë§ì´ ë§íˆê³ , ì •ë‹µë§ˆë‹¤ ë‚¨ì€ ì‹œê°„ì„ ì¡°ê¸ˆì”© ë˜ì°¾ì•„ ë³´ì„¸ìš”.',
                             style: theme.textTheme.bodyMedium,
                           ),
                           if (profile != null) ...[
@@ -129,7 +168,8 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                                 _HeaderChip(label: profile.displayName),
                                 _HeaderChip(label: schoolNameFor(profile.schoolId)),
                                 _HeaderChip(label: regionNameFor(profile.regionCode)),
-                                _HeaderChip(label: 'ÇĞ³â ${profile.grade}'),
+                                _HeaderChip(label: 'í•™ë…„ ${profile.grade}'),
+                                if (profile.seasonBest > 0) _HeaderChip(label: 'ì‹œì¦Œ ìµœê³  ${profile.seasonBest}'),
                               ],
                             ),
                           ],
@@ -144,7 +184,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                _PaperPanel(
+                PaperPanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -155,10 +195,10 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('³²Àº ½Ã°£', style: theme.textTheme.bodyMedium),
+                                Text('ë‚¨ì€ ì‹œê°„', style: theme.textTheme.bodyMedium),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${_controller.formatTimeLeft()}ÃÊ',
+                                  '${_controller.formatTimeLeft()}ì´ˆ',
                                   style: theme.textTheme.headlineMedium?.copyWith(fontSize: 42),
                                 ),
                               ],
@@ -171,7 +211,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                                 Text(_controller.gameModeConfig.label, style: theme.textTheme.titleLarge),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Á¤´ä º¸³Ê½º +${(_controller.gameModeConfig.bonusTimeMs / 1000).toStringAsFixed(1)}ÃÊ',
+                                  'ì •ë‹µ ë³´ë„ˆìŠ¤ +${(_controller.gameModeConfig.bonusTimeMs / 1000).toStringAsFixed(1)}ì´ˆ',
                                   style: theme.textTheme.bodyMedium,
                                   textAlign: TextAlign.end,
                                 ),
@@ -191,24 +231,43 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      Wrap(
+                      const Wrap(
                         spacing: 10,
                         runSpacing: 10,
                         children: [
-                          _RuleTag(label: '½Ã°£ Á¾·á ½Ã °ÔÀÓ Á¾·á'),
-                          _RuleTag(label: 'Á¤´ä¸¶´Ù ½Ã°£ È¸º¹'),
-                          _RuleTag(label: '¼Óµµ¿Í Á¤È®µµ·Î µî±Ş »êÁ¤'),
+                          _RuleTag(label: 'ì‹œê°„ ì¢…ë£Œ ì‹œ ê²Œì„ ì¢…ë£Œ'),
+                          _RuleTag(label: 'ì •ë‹µë§ˆë‹¤ ì‹œê°„ íšŒë³µ'),
+                          _RuleTag(label: 'ì†ë„ì™€ ì •í™•ë„ë¡œ ë“±ê¸‰ ì‚°ì •'),
                         ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
-                _PaperPanel(
+                PaperPanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('¸ğµå ¼±ÅÃ', style: theme.textTheme.titleLarge),
+                      Row(
+                        children: [
+                          Expanded(child: Text('ëª¨ë“œ ì„ íƒ', style: theme.textTheme.titleLarge)),
+                          if (_controller.canPlayRanked)
+                            SegmentedButton<SessionMode>(
+                              showSelectedIcon: false,
+                              segments: const [
+                                ButtonSegment<SessionMode>(value: SessionMode.practice, label: Text('ì—°ìŠµ')),
+                                ButtonSegment<SessionMode>(value: SessionMode.ranked, label: Text('ë­í¬')),
+                              ],
+                              selected: <SessionMode>{_controller.sessionMode},
+                              onSelectionChanged: modeLocked
+                                  ? null
+                                  : (selection) {
+                                      _fallbackController.clear();
+                                      _controller.setSessionMode(selection.first);
+                                    },
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
@@ -218,45 +277,61 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                               (config) => ChoiceChip(
                                 label: Text(config.label),
                                 selected: _controller.gameMode == config.mode,
-                                onSelected: (_) {
-                                  _fallbackController.clear();
-                                  _controller.setGameMode(config.mode);
-                                },
+                                onSelected: modeLocked
+                                    ? null
+                                    : (_) {
+                                        _fallbackController.clear();
+                                        _controller.setGameMode(config.mode);
+                                      },
                               ),
                             )
                             .toList(growable: false),
                       ),
                       const SizedBox(height: 10),
-                      Text(_controller.gameModeConfig.description, style: theme.textTheme.bodyMedium),
+                      Text(
+                        _controller.isRanked
+                            ? '${_controller.gameModeConfig.description} Â· ë­í¬ ê¸°ë¡ì€ ì„œë²„ì—ì„œ ë‹¤ì‹œ ì±„ì ë¼ìš”'
+                            : _controller.gameModeConfig.description,
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_controller.isRanked && _controller.rankedStatus != RankedRoundStatus.playing) ...[
+                  RankedStatusPanel(
+                    status: _controller.rankedStatus,
+                    result: _controller.rankedResult,
+                    error: _controller.rankedError,
+                    canRetrySubmission: _controller.isGameOver,
+                    onRetrySubmission: () => unawaited(_controller.retryRankedSubmission()),
+                    onRestart: _restart,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (_controller.isGameOver)
                   _RoundSummary(
                     score: score,
                     gradeLabel: grade.label,
                     gradeCaption: grade.caption,
-                    onRestart: () {
-                      _fallbackController.clear();
-                      _controller.restart();
-                    },
+                    isRanked: _controller.isRanked,
+                    onRestart: _restart,
                   )
-                else ...[
+                else if (_controller.isRunning) ...[
                   if (hasFeedback) ...[
                     _StampCard(
                       title: feedbackTitle,
                       body: feedbackBody,
                       tone: lastAttemptCorrect == true ? _FeedbackTone.success : _FeedbackTone.retry,
-                      trailing: lastAttemptCorrect == true ? '¿¬¼Ó ${_controller.currentCombo}' : submittedLabel,
+                      trailing: lastAttemptCorrect == true ? 'ì—°ì† ${_controller.currentCombo}' : submittedLabel,
                     ),
                     const SizedBox(height: 12),
                   ],
-                  _PaperPanel(
+                  PaperPanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ÇöÀç ¹®Á¦', style: theme.textTheme.bodyMedium),
+                        Text('í˜„ì¬ ë¬¸ì œ', style: theme.textTheme.bodyMedium),
                         const SizedBox(height: 10),
                         Center(
                           child: Text(
@@ -268,9 +343,25 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                         const SizedBox(height: 18),
                         SizedBox(
                           height: 252,
-                          child: InkCanvas(
-                            clearRevision: _controller.clearRevision,
-                            onInkChanged: _handleInkChanged,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: InkCanvas(
+                                  clearRevision: _controller.clearRevision,
+                                  onInkChanged: _handleInkChanged,
+                                ),
+                              ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: IconButton.filledTonal(
+                                  tooltip: 'ì§€ìš°ê¸°',
+                                  onPressed:
+                                      _controller.currentInkMetrics.strokeCount == 0 ? null : _controller.clearInk,
+                                  icon: const Icon(Icons.auto_fix_normal_outlined),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -278,14 +369,14 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                           children: [
                             Expanded(
                               child: _InfoCard(
-                                label: 'ÀÎ½Ä°ª',
+                                label: 'ì¸ì‹ê°’',
                                 value: _controller.recognizedText.isEmpty ? '-' : _controller.recognizedText,
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: _InfoCard(
-                                label: 'ÇöÀç µî±Ş',
+                                label: 'í˜„ì¬ ë“±ê¸‰',
                                 value: grade.label,
                               ),
                             ),
@@ -296,14 +387,14 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                           children: [
                             Expanded(
                               child: _InfoCard(
-                                label: 'È¹¼ö',
+                                label: 'íšìˆ˜',
                                 value: '${_controller.currentInkMetrics.strokeCount}',
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: _InfoCard(
-                                label: 'Æ÷ÀÎÆ®',
+                                label: 'í¬ì¸íŠ¸',
                                 value: '${_controller.currentInkMetrics.pointCount}',
                               ),
                             ),
@@ -313,7 +404,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                         TextField(
                           controller: _fallbackController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '¼öµ¿ ÀÔ·Â'),
+                          decoration: const InputDecoration(labelText: 'ìˆ˜ë™ ì…ë ¥'),
                           onChanged: _controller.updateManualFallback,
                           onSubmitted: (_) => _submitCurrentProblem(),
                         ),
@@ -323,17 +414,14 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                             Expanded(
                               child: FilledButton(
                                 onPressed: _submitCurrentProblem,
-                                child: const Text('Á¤´ä È®ÀÎ'),
+                                child: const Text('ì •ë‹µ í™•ì¸'),
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () {
-                                  _fallbackController.clear();
-                                  _controller.restart();
-                                },
-                                child: const Text('Ã³À½ºÎÅÍ ´Ù½Ã'),
+                                onPressed: _restart,
+                                child: Text(_controller.isRanked ? 'í¬ê¸°í•˜ê³  ìƒˆ ë­í¬' : 'ì²˜ìŒë¶€í„° ë‹¤ì‹œ'),
                               ),
                             ),
                           ],
@@ -343,38 +431,51 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                   ),
                 ],
                 const SizedBox(height: 12),
-                _PaperPanel(
+                PaperPanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ÀÌ¹ø ¶ó¿îµå ±â·Ï', style: theme.textTheme.titleLarge),
+                      Text('ì´ë²ˆ ë¼ìš´ë“œ ê¸°ë¡', style: theme.textTheme.titleLarge),
                       const SizedBox(height: 14),
                       Row(
                         children: [
-                          Expanded(child: _Metric(label: 'Á¤´ä ¼ö', value: '${score.correctCount}')),
-                          Expanded(child: _Metric(label: '½Ãµµ ¼ö', value: '${score.attemptCount}')),
-                          Expanded(child: _Metric(label: 'Á¤È®µµ', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
+                          Expanded(child: MetricTile(label: 'ì •ë‹µ ìˆ˜', value: '${score.correctCount}')),
+                          Expanded(child: MetricTile(label: 'ì‹œë„ ìˆ˜', value: '${score.attemptCount}')),
+                          Expanded(
+                              child:
+                                  MetricTile(label: 'ì •í™•ë„', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: _Metric(label: 'ºĞ´ç Á¤´ä', value: score.correctPerMinute.toStringAsFixed(1))),
-                          Expanded(child: _Metric(label: '¿¬¼Ó Á¤´ä', value: '${_controller.currentCombo}')),
-                          Expanded(child: _Metric(label: 'º¸³Ê½º ½Ã°£', value: '+${(_controller.totalBonusMs / 1000).toStringAsFixed(1)}s')),
+                          Expanded(child: MetricTile(label: 'ë¶„ë‹¹ ì •ë‹µ', value: score.correctPerMinute.toStringAsFixed(1))),
+                          Expanded(child: MetricTile(label: 'ì—°ì† ì •ë‹µ', value: '${_controller.currentCombo}')),
+                          Expanded(
+                              child: MetricTile(
+                                  label: 'ë³´ë„ˆìŠ¤ ì‹œê°„', value: '+${(_controller.totalBonusMs / 1000).toStringAsFixed(1)}s')),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: _Metric(label: 'ÃÖ´ë ÄŞº¸', value: '${score.comboMax}')),
-                          Expanded(child: _Metric(label: 'µÎ³ú Á¡¼ö', value: '${score.brainScore}')),
-                          Expanded(child: _Metric(label: 'ÇöÀç µî±Ş', value: grade.label)),
+                          Expanded(child: MetricTile(label: 'ìµœëŒ€ ì½¤ë³´', value: '${score.comboMax}')),
+                          Expanded(child: MetricTile(label: 'ë‘ë‡Œ ì ìˆ˜', value: '${score.brainScore}')),
+                          Expanded(child: MetricTile(label: 'í˜„ì¬ ë“±ê¸‰', value: grade.label)),
                         ],
                       ),
                     ],
                   ),
                 ),
+                if (_leaderboardRepository != null) ...[
+                  const SizedBox(height: 12),
+                  LeaderboardPanel(
+                    repository: _leaderboardRepository!,
+                    refreshToken: _leaderboardRefreshToken,
+                    highlightSchoolId: profile?.schoolId,
+                    highlightRegionCode: profile?.regionCode,
+                  ),
+                ],
               ],
             ),
           ),
@@ -389,23 +490,25 @@ class _RoundSummary extends StatelessWidget {
     required this.score,
     required this.gradeLabel,
     required this.gradeCaption,
+    required this.isRanked,
     required this.onRestart,
   });
 
   final BrainScoreBreakdown score;
   final String gradeLabel;
   final String gradeCaption;
+  final bool isRanked;
   final VoidCallback onRestart;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return _PaperPanel(
+    return PaperPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('¶ó¿îµå Á¾·á', style: theme.textTheme.titleLarge),
+          Text('ë¼ìš´ë“œ ì¢…ë£Œ', style: theme.textTheme.titleLarge),
           const SizedBox(height: 10),
           Text(
             gradeLabel,
@@ -416,75 +519,26 @@ class _RoundSummary extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              Expanded(child: _Metric(label: 'Á¤´ä', value: '${score.correctCount}')),
-              Expanded(child: _Metric(label: '½Ãµµ', value: '${score.attemptCount}')),
-              Expanded(child: _Metric(label: 'Á¤È®µµ', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
+              Expanded(child: MetricTile(label: 'ì •ë‹µ', value: '${score.correctCount}')),
+              Expanded(child: MetricTile(label: 'ì‹œë„', value: '${score.attemptCount}')),
+              Expanded(child: MetricTile(label: 'ì •í™•ë„', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _Metric(label: 'ºĞ´ç Á¤´ä', value: score.correctPerMinute.toStringAsFixed(1))),
-              Expanded(child: _Metric(label: 'ÃÖ´ë ÄŞº¸', value: '${score.comboMax}')),
-              Expanded(child: _Metric(label: 'Á¡¼ö', value: '${score.brainScore}')),
+              Expanded(child: MetricTile(label: 'ë¶„ë‹¹ ì •ë‹µ', value: score.correctPerMinute.toStringAsFixed(1))),
+              Expanded(child: MetricTile(label: 'ìµœëŒ€ ì½¤ë³´', value: '${score.comboMax}')),
+              Expanded(child: MetricTile(label: isRanked ? 'ì˜ˆìƒ ì ìˆ˜' : 'ì ìˆ˜', value: '${score.brainScore}')),
             ],
           ),
           const SizedBox(height: 18),
           FilledButton(
             onPressed: onRestart,
-            child: const Text('°°Àº ¸ğµå·Î ´Ù½Ã ÇÏ±â'),
+            child: Text(isRanked ? 'ë­í¬ í•œ íŒ ë”' : 'ê°™ì€ ëª¨ë“œë¡œ ë‹¤ì‹œ í•˜ê¸°'),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PaperPanel extends StatelessWidget {
-  const _PaperPanel({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFD9D0C0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: theme.textTheme.bodyMedium),
-        const SizedBox(height: 4),
-        Text(value, style: theme.textTheme.titleLarge),
-      ],
     );
   }
 }
@@ -563,7 +617,7 @@ class _StampCard extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(
-              tone == _FeedbackTone.success ? 'µµÀå' : '¸Ş¸ğ',
+              tone == _FeedbackTone.success ? 'ë„ì¥' : 'ë©”ëª¨',
               style: TextStyle(
                 color: accent,
                 fontWeight: FontWeight.w800,
@@ -670,6 +724,3 @@ class _RuleTag extends StatelessWidget {
     );
   }
 }
-
-
-

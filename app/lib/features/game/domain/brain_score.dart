@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import 'game_mode.dart';
 
@@ -64,7 +64,7 @@ class BrainScoreCalculator {
     final elapsedTotal = attempts
         .map((attempt) => attempt.elapsedMs)
         .reduce((left, right) => left + right);
-    final correctPerMinute = correctCount == 0 ? 0 : correctCount / (elapsedTotal / 60000);
+    final correctPerMinute = correctCount == 0 ? 0.0 : correctCount / (elapsedTotal / 60000);
     final speedRate = (correctPerMinute / config.targetCorrectPerMinute).clamp(0.35, 1.35);
 
     var combo = 0;
@@ -74,20 +74,14 @@ class BrainScoreCalculator {
       comboMax = math.max(comboMax, combo);
     }
 
-    final difficultyWeight = switch (mode) {
-      GameMode.simpleCalculation => 90,
-      GameMode.fourOperations => 120,
-      GameMode.doubleDigit => 150,
-      GameMode.tripleDigit => 190,
-    };
-    final basePoints = correctCount * difficultyWeight * (0.6 + (accuracyRate * 0.4));
+    final basePoints = correctCount * config.difficultyWeight * (0.6 + (accuracyRate * 0.4));
     final comboBonus = comboMax * (10 + (mode.index * 8));
     final finalScore = ((basePoints * speedRate) + comboBonus).round();
 
     return BrainScoreBreakdown(
       brainScore: finalScore,
       accuracyRate: accuracyRate,
-      speedRate: speedRate.toDouble(),
+      speedRate: speedRate,
       correctPerMinute: correctPerMinute,
       basePoints: basePoints,
       comboBonus: comboBonus,

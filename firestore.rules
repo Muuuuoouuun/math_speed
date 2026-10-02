@@ -31,7 +31,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid);
+      // 프로필 생성은 upsertPlayerProfile 함수만 합니다. (점수 필드를 클라이언트가 위조하지 못하게)
+      allow create: if false;
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).changedKeys().hasOnly([
           'displayName',

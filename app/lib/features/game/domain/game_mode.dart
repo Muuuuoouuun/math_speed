@@ -1,8 +1,20 @@
-﻿enum GameMode {
+enum GameMode {
   simpleCalculation,
   fourOperations,
   doubleDigit,
   tripleDigit,
+}
+
+extension GameModeId on GameMode {
+  /// 서버(functions/src/gameEngine.ts)와 주고받는 모드 식별자입니다.
+  String get id => name;
+
+  static GameMode? tryParse(String? value) {
+    for (final mode in GameMode.values) {
+      if (mode.name == value) return mode;
+    }
+    return null;
+  }
 }
 
 class GameModeConfig {
@@ -14,6 +26,7 @@ class GameModeConfig {
     required this.bonusTimeMs,
     required this.maxTimeMs,
     required this.targetCorrectPerMinute,
+    required this.difficultyWeight,
   });
 
   final GameMode mode;
@@ -23,6 +36,7 @@ class GameModeConfig {
   final int bonusTimeMs;
   final int maxTimeMs;
   final double targetCorrectPerMinute;
+  final int difficultyWeight;
 
   static const all = <GameModeConfig>[
     GameModeConfig(
@@ -33,6 +47,7 @@ class GameModeConfig {
       bonusTimeMs: 1700,
       maxTimeMs: 62000,
       targetCorrectPerMinute: 26,
+      difficultyWeight: 90,
     ),
     GameModeConfig(
       mode: GameMode.fourOperations,
@@ -42,6 +57,7 @@ class GameModeConfig {
       bonusTimeMs: 1500,
       maxTimeMs: 72000,
       targetCorrectPerMinute: 18,
+      difficultyWeight: 120,
     ),
     GameModeConfig(
       mode: GameMode.doubleDigit,
@@ -51,6 +67,7 @@ class GameModeConfig {
       bonusTimeMs: 1400,
       maxTimeMs: 76000,
       targetCorrectPerMinute: 14,
+      difficultyWeight: 150,
     ),
     GameModeConfig(
       mode: GameMode.tripleDigit,
@@ -60,6 +77,7 @@ class GameModeConfig {
       bonusTimeMs: 1300,
       maxTimeMs: 86000,
       targetCorrectPerMinute: 10,
+      difficultyWeight: 190,
     ),
   ];
 

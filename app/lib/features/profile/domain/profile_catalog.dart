@@ -23,29 +23,29 @@ class SchoolOption {
 const List<RegionOption> kRegionOptions = <RegionOption>[
   RegionOption(
     code: 'KR-11',
-    name: '¼­¿ï',
+    name: 'ì„œìš¸',
     schools: <SchoolOption>[
-      SchoolOption(id: 'seoul-junior', name: '¼­¿ï µÎ³ú ÃÊµîÇĞ±³'),
-      SchoolOption(id: 'han-river', name: 'ÇÑ°­ °è»ê ÇĞ±³'),
-      SchoolOption(id: 'namsan-academy', name: '³²»ê ¿¬»ê ¾ÆÄ«µ¥¹Ì'),
+      SchoolOption(id: 'seoul-junior', name: 'ì„œìš¸ ë‘ë‡Œ ì´ˆë“±í•™êµ'),
+      SchoolOption(id: 'han-river', name: 'í•œê°• ê³„ì‚° í•™êµ'),
+      SchoolOption(id: 'namsan-academy', name: 'ë‚¨ì‚° ì—°ì‚° ì•„ì¹´ë°ë¯¸'),
     ],
   ),
   RegionOption(
     code: 'KR-26',
-    name: 'ºÎ»ê',
+    name: 'ë¶€ì‚°',
     schools: <SchoolOption>[
-      SchoolOption(id: 'busan-ocean', name: 'ºÎ»ê ¹Ù´Ù ÃÊµîÇĞ±³'),
-      SchoolOption(id: 'gwangalli-math', name: '±¤¾È¸® ¼öÇĞ ÇĞ±³'),
-      SchoolOption(id: 'haeundae-brain', name: 'ÇØ¿î´ë µÎ³ú ÇĞ±³'),
+      SchoolOption(id: 'busan-ocean', name: 'ë¶€ì‚° ë°”ë‹¤ ì´ˆë“±í•™êµ'),
+      SchoolOption(id: 'gwangalli-math', name: 'ê´‘ì•ˆë¦¬ ìˆ˜í•™ í•™êµ'),
+      SchoolOption(id: 'haeundae-brain', name: 'í•´ìš´ëŒ€ ë‘ë‡Œ í•™êµ'),
     ],
   ),
   RegionOption(
     code: 'KR-27',
-    name: '´ë±¸',
+    name: 'ëŒ€êµ¬',
     schools: <SchoolOption>[
-      SchoolOption(id: 'daegu-alpha', name: '´ë±¸ ¾ËÆÄ ÇĞ±³'),
-      SchoolOption(id: 'suseong-math', name: '¼ö¼º °è»ê ÇĞ±³'),
-      SchoolOption(id: 'brain-valley', name: 'ºê·¹ÀÎ ¹ë¸® ÃÊµîÇĞ±³'),
+      SchoolOption(id: 'daegu-alpha', name: 'ëŒ€êµ¬ ì•ŒíŒŒ í•™êµ'),
+      SchoolOption(id: 'suseong-math', name: 'ìˆ˜ì„± ê³„ì‚° í•™êµ'),
+      SchoolOption(id: 'brain-valley', name: 'ë¸Œë ˆì¸ ë°¸ë¦¬ ì´ˆë“±í•™êµ'),
     ],
   ),
 ];

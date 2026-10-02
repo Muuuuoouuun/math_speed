@@ -5,6 +5,7 @@ class PlayerProfile {
     required this.schoolId,
     required this.regionCode,
     required this.grade,
+    this.seasonBest = 0,
   });
 
   final String uid;
@@ -12,6 +13,7 @@ class PlayerProfile {
   final String schoolId;
   final String regionCode;
   final int grade;
+  final int seasonBest;
 
   bool get isComplete =>
       displayName.trim().isNotEmpty &&
@@ -26,6 +28,7 @@ class PlayerProfile {
       schoolId: (json['schoolId'] as String?) ?? '',
       regionCode: (json['regionCode'] as String?) ?? '',
       grade: (json['grade'] as num?)?.toInt() ?? 0,
+      seasonBest: (json['currentSeasonBest'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -36,11 +39,13 @@ class ProfileDraft {
     required this.schoolId,
     required this.regionCode,
     required this.grade,
+    this.seasonBest = 0,
   });
 
   final String displayName;
   final String schoolId;
   final String regionCode;
   final int grade;
+  final int seasonBest;
 }
 
