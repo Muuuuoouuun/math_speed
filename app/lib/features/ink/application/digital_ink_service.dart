@@ -23,14 +23,11 @@ class DigitalInkService {
   DigitalInkRecognizer? _recognizer;
 
   Future<void> ensureModelDownloaded() async {
-    final model = DigitalInkRecognitionModel(languageCode: _languageCode);
-    final isDownloaded = await _modelManager.isModelDownloaded(model);
-    if (isDownloaded) {
-      _recognizer ??= DigitalInkRecognizer(languageCode: _languageCode);
-      return;
+    // ModelManager는 모델 객체가 아니라 BCP 47 언어 태그 문자열을 받습니다.
+    final isDownloaded = await _modelManager.isModelDownloaded(_languageCode);
+    if (!isDownloaded) {
+      await _modelManager.downloadModel(_languageCode);
     }
-
-    await _modelManager.downloadModel(model);
     _recognizer ??= DigitalInkRecognizer(languageCode: _languageCode);
   }
 

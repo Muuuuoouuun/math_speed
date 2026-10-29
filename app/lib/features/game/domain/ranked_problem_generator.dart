@@ -10,6 +10,13 @@ import 'math_problem.dart';
 class RankedProblemGenerator {
   const RankedProblemGenerator();
 
+  /// Both ranked callers use the same balanced ten-level generator.
+  List<MathProblem> generateSession({
+    required int seed,
+    required int level,
+    required int count,
+  }) => generateSessionProblems(seed: seed, level: level, count: count);
+
   List<MathProblem> generateSessionProblems({
     required int seed,
     required int level,

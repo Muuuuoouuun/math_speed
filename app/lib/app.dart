@@ -18,6 +18,17 @@ class BrainMathApp extends StatelessWidget {
       title: '연필 계산',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      // 기기 글꼴 크기를 크게 키워 둔 경우에도 레이아웃이 무너지지 않도록
+      // 배율에 상한을 둡니다.
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.25),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: AppShell(environment: environment),
     );
   }

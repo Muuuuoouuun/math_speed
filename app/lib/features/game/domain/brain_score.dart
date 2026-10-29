@@ -64,7 +64,7 @@ class BrainScoreCalculator {
     final elapsedTotal = attempts
         .map((attempt) => attempt.elapsedMs)
         .reduce((left, right) => left + right);
-    final correctPerMinute = correctCount == 0 ? 0 : correctCount / (elapsedTotal / 60000);
+    final correctPerMinute = correctCount == 0 ? 0.0 : correctCount / (elapsedTotal / 60000);
     final speedRate = (correctPerMinute / config.targetCorrectPerMinute).clamp(0.35, 1.35);
 
     var combo = 0;
