@@ -15,7 +15,7 @@ class BrainMathApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '¿¬ÇÊ °è»ê',
+      title: 'ì—°í•„ ê³„ì‚°',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: AppShell(environment: environment),

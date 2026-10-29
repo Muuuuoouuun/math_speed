@@ -45,7 +45,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
     try {
       await _digitalInkService.ensureModelDownloaded();
     } catch (_) {
-      // ¸ğµ¨ ´Ù¿î·Îµå¿¡ ½ÇÆĞÇØµµ ¼öµ¿ ÀÔ·ÂÀ¸·Î ²÷±è ¾øÀÌ ÇÃ·¹ÀÌÇÒ ¼ö ÀÖ°Ô µÓ´Ï´Ù.
+      // ëª¨ë¸ ë‹¤ìš´ë¡œë“œì— ì‹¤íŒ¨í•´ë„ ìˆ˜ë™ ì…ë ¥ìœ¼ë¡œ ëŠê¹€ ì—†ì´ í”Œë ˆì´í•  ìˆ˜ ìˆê²Œ ë‘¡ë‹ˆë‹¤.
     }
   }
 
@@ -69,7 +69,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
 
     _recognitionDebounce?.cancel();
     _recognitionDebounce = Timer(const Duration(milliseconds: 90), () async {
-      // Optimization: ¼Õ±Û¾¾ ÀÎ½ÄÀº ½ºÆ®·ÎÅ©¸¶´Ù ¹Ù·Î ºÎ¸£¸é ÇÃ·§Æû Ã¤³Î ¿Õº¹ÀÌ ´©ÀûµÇ¹Ç·Î ÂªÀº debounce·Î Áö¿¬°ú ¹èÅÍ¸®¸¦ ÇÔ²² ÁÙÀÔ´Ï´Ù.
+      // Optimization: ì†ê¸€ì”¨ ì¸ì‹ì€ ìŠ¤íŠ¸ë¡œí¬ë§ˆë‹¤ ë°”ë¡œ ë¶€ë¥´ë©´ í”Œë«í¼ ì±„ë„ ì™•ë³µì´ ëˆ„ì ë˜ë¯€ë¡œ ì§§ì€ debounceë¡œ ì§€ì—°ê³¼ ë°°í„°ë¦¬ë¥¼ í•¨ê»˜ ì¤„ì…ë‹ˆë‹¤.
       final preview = await _digitalInkService.recognize(strokes);
       if (!mounted || preview == null) return;
       _controller.updateRecognitionPreview(preview.text);
@@ -96,11 +96,11 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
         final progress = (_controller.timeLeftMs / _controller.gameModeConfig.maxTimeMs).clamp(0.0, 1.0);
         final lastAttemptCorrect = _controller.lastAttemptCorrect;
         final hasFeedback = lastAttemptCorrect != null && !_controller.isGameOver;
-        final feedbackTitle = lastAttemptCorrect == true ? 'Âü ÀßÇß¾î¿ä' : '´ÙÀ½ ¹®Á¦·Î ÀÌ¾î°¡¿ä';
+        final feedbackTitle = lastAttemptCorrect == true ? 'ì°¸ ì˜í–ˆì–´ìš”' : 'ë‹¤ìŒ ë¬¸ì œë¡œ ì´ì–´ê°€ìš”';
         final feedbackBody = lastAttemptCorrect == true
-            ? '+${(_controller.lastBonusAwardedMs / 1000).toStringAsFixed(1)}ÃÊ º¸³Ê½º°¡ Ãß°¡µÆ¾î¿ä'
-            : 'Á¤´äÀº ${_controller.lastExpectedAnswer ?? '-'}¿´¾î¿ä';
-        final submittedLabel = _controller.lastSubmittedAnswer.isEmpty ? 'ÀÔ·Â ¾øÀ½' : _controller.lastSubmittedAnswer;
+            ? '+${(_controller.lastBonusAwardedMs / 1000).toStringAsFixed(1)}ì´ˆ ë³´ë„ˆìŠ¤ê°€ ì¶”ê°€ëì–´ìš”'
+            : 'ì •ë‹µì€ ${_controller.lastExpectedAnswer ?? '-'}ì˜€ì–´ìš”';
+        final submittedLabel = _controller.lastSubmittedAnswer.isEmpty ? 'ì…ë ¥ ì—†ìŒ' : _controller.lastSubmittedAnswer;
 
         return Scaffold(
           body: SafeArea(
@@ -114,10 +114,10 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('¿¬ÇÊ °è»ê', style: theme.textTheme.headlineMedium),
+                          Text('ì—°í•„ ê³„ì‚°', style: theme.textTheme.headlineMedium),
                           const SizedBox(height: 6),
                           Text(
-                            '½Ã°£ ¾È¿¡ ÃÖ´ëÇÑ ¸¹ÀÌ ¸ÂÈ÷°í, Á¤´ä¸¶´Ù ³²Àº ½Ã°£À» Á¶±İ¾¿ µÇÃ£¾Æ º¸¼¼¿ä.',
+                            'ì‹œê°„ ì•ˆì— ìµœëŒ€í•œ ë§ì´ ë§íˆê³ , ì •ë‹µë§ˆë‹¤ ë‚¨ì€ ì‹œê°„ì„ ì¡°ê¸ˆì”© ë˜ì°¾ì•„ ë³´ì„¸ìš”.',
                             style: theme.textTheme.bodyMedium,
                           ),
                           if (profile != null) ...[
@@ -129,7 +129,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                                 _HeaderChip(label: profile.displayName),
                                 _HeaderChip(label: schoolNameFor(profile.schoolId)),
                                 _HeaderChip(label: regionNameFor(profile.regionCode)),
-                                _HeaderChip(label: 'ÇĞ³â ${profile.grade}'),
+                                _HeaderChip(label: 'í•™ë…„ ${profile.grade}'),
                               ],
                             ),
                           ],
@@ -155,10 +155,10 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('³²Àº ½Ã°£', style: theme.textTheme.bodyMedium),
+                                Text('ë‚¨ì€ ì‹œê°„', style: theme.textTheme.bodyMedium),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${_controller.formatTimeLeft()}ÃÊ',
+                                  '${_controller.formatTimeLeft()}ì´ˆ',
                                   style: theme.textTheme.headlineMedium?.copyWith(fontSize: 42),
                                 ),
                               ],
@@ -171,7 +171,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                                 Text(_controller.gameModeConfig.label, style: theme.textTheme.titleLarge),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Á¤´ä º¸³Ê½º +${(_controller.gameModeConfig.bonusTimeMs / 1000).toStringAsFixed(1)}ÃÊ',
+                                  'ì •ë‹µ ë³´ë„ˆìŠ¤ +${(_controller.gameModeConfig.bonusTimeMs / 1000).toStringAsFixed(1)}ì´ˆ',
                                   style: theme.textTheme.bodyMedium,
                                   textAlign: TextAlign.end,
                                 ),
@@ -195,9 +195,9 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                         spacing: 10,
                         runSpacing: 10,
                         children: [
-                          _RuleTag(label: '½Ã°£ Á¾·á ½Ã °ÔÀÓ Á¾·á'),
-                          _RuleTag(label: 'Á¤´ä¸¶´Ù ½Ã°£ È¸º¹'),
-                          _RuleTag(label: '¼Óµµ¿Í Á¤È®µµ·Î µî±Ş »êÁ¤'),
+                          _RuleTag(label: 'ì‹œê°„ ì¢…ë£Œ ì‹œ ê²Œì„ ì¢…ë£Œ'),
+                          _RuleTag(label: 'ì •ë‹µë§ˆë‹¤ ì‹œê°„ íšŒë³µ'),
+                          _RuleTag(label: 'ì†ë„ì™€ ì •í™•ë„ë¡œ ë“±ê¸‰ ì‚°ì •'),
                         ],
                       ),
                     ],
@@ -208,7 +208,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('¸ğµå ¼±ÅÃ', style: theme.textTheme.titleLarge),
+                      Text('ëª¨ë“œ ì„ íƒ', style: theme.textTheme.titleLarge),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
@@ -248,7 +248,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                       title: feedbackTitle,
                       body: feedbackBody,
                       tone: lastAttemptCorrect == true ? _FeedbackTone.success : _FeedbackTone.retry,
-                      trailing: lastAttemptCorrect == true ? '¿¬¼Ó ${_controller.currentCombo}' : submittedLabel,
+                      trailing: lastAttemptCorrect == true ? 'ì—°ì† ${_controller.currentCombo}' : submittedLabel,
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -256,7 +256,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ÇöÀç ¹®Á¦', style: theme.textTheme.bodyMedium),
+                        Text('í˜„ì¬ ë¬¸ì œ', style: theme.textTheme.bodyMedium),
                         const SizedBox(height: 10),
                         Center(
                           child: Text(
@@ -278,14 +278,14 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                           children: [
                             Expanded(
                               child: _InfoCard(
-                                label: 'ÀÎ½Ä°ª',
+                                label: 'ì¸ì‹ê°’',
                                 value: _controller.recognizedText.isEmpty ? '-' : _controller.recognizedText,
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: _InfoCard(
-                                label: 'ÇöÀç µî±Ş',
+                                label: 'í˜„ì¬ ë“±ê¸‰',
                                 value: grade.label,
                               ),
                             ),
@@ -296,14 +296,14 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                           children: [
                             Expanded(
                               child: _InfoCard(
-                                label: 'È¹¼ö',
+                                label: 'íšìˆ˜',
                                 value: '${_controller.currentInkMetrics.strokeCount}',
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: _InfoCard(
-                                label: 'Æ÷ÀÎÆ®',
+                                label: 'í¬ì¸íŠ¸',
                                 value: '${_controller.currentInkMetrics.pointCount}',
                               ),
                             ),
@@ -313,7 +313,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                         TextField(
                           controller: _fallbackController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '¼öµ¿ ÀÔ·Â'),
+                          decoration: const InputDecoration(labelText: 'ìˆ˜ë™ ì…ë ¥'),
                           onChanged: _controller.updateManualFallback,
                           onSubmitted: (_) => _submitCurrentProblem(),
                         ),
@@ -323,7 +323,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                             Expanded(
                               child: FilledButton(
                                 onPressed: _submitCurrentProblem,
-                                child: const Text('Á¤´ä È®ÀÎ'),
+                                child: const Text('ì •ë‹µ í™•ì¸'),
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -333,7 +333,7 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                                   _fallbackController.clear();
                                   _controller.restart();
                                 },
-                                child: const Text('Ã³À½ºÎÅÍ ´Ù½Ã'),
+                                child: const Text('ì²˜ìŒë¶€í„° ë‹¤ì‹œ'),
                               ),
                             ),
                           ],
@@ -347,29 +347,29 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ÀÌ¹ø ¶ó¿îµå ±â·Ï', style: theme.textTheme.titleLarge),
+                      Text('ì´ë²ˆ ë¼ìš´ë“œ ê¸°ë¡', style: theme.textTheme.titleLarge),
                       const SizedBox(height: 14),
                       Row(
                         children: [
-                          Expanded(child: _Metric(label: 'Á¤´ä ¼ö', value: '${score.correctCount}')),
-                          Expanded(child: _Metric(label: '½Ãµµ ¼ö', value: '${score.attemptCount}')),
-                          Expanded(child: _Metric(label: 'Á¤È®µµ', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
+                          Expanded(child: _Metric(label: 'ì •ë‹µ ìˆ˜', value: '${score.correctCount}')),
+                          Expanded(child: _Metric(label: 'ì‹œë„ ìˆ˜', value: '${score.attemptCount}')),
+                          Expanded(child: _Metric(label: 'ì •í™•ë„', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: _Metric(label: 'ºĞ´ç Á¤´ä', value: score.correctPerMinute.toStringAsFixed(1))),
-                          Expanded(child: _Metric(label: '¿¬¼Ó Á¤´ä', value: '${_controller.currentCombo}')),
-                          Expanded(child: _Metric(label: 'º¸³Ê½º ½Ã°£', value: '+${(_controller.totalBonusMs / 1000).toStringAsFixed(1)}s')),
+                          Expanded(child: _Metric(label: 'ë¶„ë‹¹ ì •ë‹µ', value: score.correctPerMinute.toStringAsFixed(1))),
+                          Expanded(child: _Metric(label: 'ì—°ì† ì •ë‹µ', value: '${_controller.currentCombo}')),
+                          Expanded(child: _Metric(label: 'ë³´ë„ˆìŠ¤ ì‹œê°„', value: '+${(_controller.totalBonusMs / 1000).toStringAsFixed(1)}s')),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: _Metric(label: 'ÃÖ´ë ÄŞº¸', value: '${score.comboMax}')),
-                          Expanded(child: _Metric(label: 'µÎ³ú Á¡¼ö', value: '${score.brainScore}')),
-                          Expanded(child: _Metric(label: 'ÇöÀç µî±Ş', value: grade.label)),
+                          Expanded(child: _Metric(label: 'ìµœëŒ€ ì½¤ë³´', value: '${score.comboMax}')),
+                          Expanded(child: _Metric(label: 'ë‘ë‡Œ ì ìˆ˜', value: '${score.brainScore}')),
+                          Expanded(child: _Metric(label: 'í˜„ì¬ ë“±ê¸‰', value: grade.label)),
                         ],
                       ),
                     ],
@@ -405,7 +405,7 @@ class _RoundSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('¶ó¿îµå Á¾·á', style: theme.textTheme.titleLarge),
+          Text('ë¼ìš´ë“œ ì¢…ë£Œ', style: theme.textTheme.titleLarge),
           const SizedBox(height: 10),
           Text(
             gradeLabel,
@@ -416,23 +416,23 @@ class _RoundSummary extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              Expanded(child: _Metric(label: 'Á¤´ä', value: '${score.correctCount}')),
-              Expanded(child: _Metric(label: '½Ãµµ', value: '${score.attemptCount}')),
-              Expanded(child: _Metric(label: 'Á¤È®µµ', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
+              Expanded(child: _Metric(label: 'ì •ë‹µ', value: '${score.correctCount}')),
+              Expanded(child: _Metric(label: 'ì‹œë„', value: '${score.attemptCount}')),
+              Expanded(child: _Metric(label: 'ì •í™•ë„', value: '${(score.accuracyRate * 100).toStringAsFixed(0)}%')),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _Metric(label: 'ºĞ´ç Á¤´ä', value: score.correctPerMinute.toStringAsFixed(1))),
-              Expanded(child: _Metric(label: 'ÃÖ´ë ÄŞº¸', value: '${score.comboMax}')),
-              Expanded(child: _Metric(label: 'Á¡¼ö', value: '${score.brainScore}')),
+              Expanded(child: _Metric(label: 'ë¶„ë‹¹ ì •ë‹µ', value: score.correctPerMinute.toStringAsFixed(1))),
+              Expanded(child: _Metric(label: 'ìµœëŒ€ ì½¤ë³´', value: '${score.comboMax}')),
+              Expanded(child: _Metric(label: 'ì ìˆ˜', value: '${score.brainScore}')),
             ],
           ),
           const SizedBox(height: 18),
           FilledButton(
             onPressed: onRestart,
-            child: const Text('°°Àº ¸ğµå·Î ´Ù½Ã ÇÏ±â'),
+            child: const Text('ê°™ì€ ëª¨ë“œë¡œ ë‹¤ì‹œ í•˜ê¸°'),
           ),
         ],
       ),
@@ -563,7 +563,7 @@ class _StampCard extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(
-              tone == _FeedbackTone.success ? 'µµÀå' : '¸Ş¸ğ',
+              tone == _FeedbackTone.success ? 'ë„ì¥' : 'ë©”ëª¨',
               style: TextStyle(
                 color: accent,
                 fontWeight: FontWeight.w800,
