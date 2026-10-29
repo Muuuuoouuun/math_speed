@@ -18,7 +18,6 @@ import {
   ACTIVE_SEASON_ID,
   APP_REGION,
   BALANCE_VERSION,
-  DEFAULT_PROBLEM_COUNT,
   ELIGIBILITY_ATTEMPTS,
   LEADERBOARD_LIMIT,
   SESSION_TTL_MINUTES,
@@ -35,6 +34,7 @@ import { normalizeAnswer } from './answers';
 import { generateSessionProblems } from './mathEngine';
 import { calculateBrainScore } from './scoring';
 import { clampElapsed, isGameMode, replayRound, type GameMode } from './gameEngine';
+import { claimsForProfile, rankedLevelSettings } from './rankedPolicy';
 
 if (getApps().length === 0) initializeApp();
 setGlobalOptions({ region: APP_REGION, maxInstances: 20, memory: '256MiB' });
@@ -134,27 +134,6 @@ function assertAuthenticated(auth: unknown): { uid: string } {
   }
 
   return { uid: String((auth as { uid: string }).uid) };
-}
-
-function problemCountForLevel(level: number): number {
-  switch (level) {
-    case 1:
-    case 2:
-      return 10;
-    case 3:
-    case 4:
-      return 12;
-    case 5:
-    case 6:
-      return 14;
-    case 7:
-    case 8:
-      return 16;
-    case 9:
-      return 18;
-    default:
-      return 20;
-  }
 }
 
 function aggregateId(scope: string, entityId: string, seasonId: string, levelBucket: string): string {
@@ -290,15 +269,7 @@ function applyAggregateWrites(options: {
 
 export const createRankedSession = onCall(async (request) => {
   const { uid } = assertAuthenticated(request.auth);
-  const level = Number(request.data?.level ?? 1);
-  if (!Number.isInteger(level) || level < 1 || level > 10) {
-    throw new HttpsError('invalid-argument', 'level must be an integer between 1 and 10.');
-  }
-
-  const problemCount = Number(request.data?.problemCount ?? problemCountForLevel(level) ?? DEFAULT_PROBLEM_COUNT);
-  if (!Number.isInteger(problemCount) || problemCount < 5 || problemCount > 30) {
-    throw new HttpsError('invalid-argument', 'problemCount must be between 5 and 30.');
-  }
+  const { level, problemCount } = rankedLevelSettings(request.data);
 
   const profile = await getRequiredUserProfile(uid);
   const sessionRef = db.collection('ranked_sessions').doc();
@@ -682,13 +653,15 @@ export const submitTimeAttackSessionV2 = onCall(async (request) => {
 
 export const syncUserClaims = onCall(async (request) => {
   const { uid } = assertAuthenticated(request.auth);
-  const profile = await getRequiredUserProfile(uid);
-
-  await getAuth().setCustomUserClaims(uid, {
-    schoolId: profile.schoolId,
-    regionCode: profile.regionCode,
-    role: profile.role ?? 'player',
+  const auth = getAuth();
+  const [profile, user] = await Promise.all([getRequiredUserProfile(uid), auth.getUser(uid)]);
+  const claims = claimsForProfile(user.customClaims, {
+    schoolId: String(profile.schoolId),
+    regionCode: String(profile.regionCode),
   });
+  await auth.setCustomUserClaims(uid, claims);
+  // Repair any legacy profile role without promoting it into an Auth permission.
+  await db.collection('users').doc(uid).set({ role: claims.role }, { merge: true });
 
   return {
     ok: true,
@@ -719,8 +692,10 @@ export const upsertPlayerProfile = onCall(async (request) => {
   }
 
   const userRef = db.collection('users').doc(uid);
-  const snapshot = await userRef.get();
+  const auth = getAuth();
+  const [snapshot, user] = await Promise.all([userRef.get(), auth.getUser(uid)]);
   const existing = snapshot.exists ? (snapshot.data() as UserProfile) : undefined;
+  const claims = claimsForProfile(user.customClaims, { schoolId, regionCode });
 
   await userRef.set(
     {
@@ -728,18 +703,14 @@ export const upsertPlayerProfile = onCall(async (request) => {
       schoolId,
       regionCode,
       grade,
-      role: existing?.role ?? 'player',
+      role: claims.role,
       createdAt: existing?.createdAt ?? FieldValue.serverTimestamp(),
       lastSeenAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
   );
 
-  await getAuth().setCustomUserClaims(uid, {
-    schoolId,
-    regionCode,
-    role: existing?.role ?? 'player',
-  });
+  await auth.setCustomUserClaims(uid, claims);
 
   return {
     uid,

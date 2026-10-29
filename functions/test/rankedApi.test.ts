@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import { getFirestore } from 'firebase-admin/firestore';
 import { cert, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
 initializeApp({
   projectId: 'demo-brain-math-unit-tests',
@@ -18,13 +19,16 @@ const {
   createTimeAttackSessionV2,
   submitRankedSession,
   submitTimeAttackSessionV2,
+  syncUserClaims,
+  upsertPlayerProfile,
 } = require('../src/index') as typeof import('../src/index');
 import { generateProblem, replayRound } from '../src/gameEngine';
 import { generateSessionProblems } from '../src/mathEngine';
 
 // Exercise the actual callable handlers against an in-memory Firestore boundary.
-// No credentials, emulator, or network access is used by this suite.
+// The test-only certificate is generated in memory; no real credentials or network are used.
 const documents = new Map<string, Record<string, any>>();
+const authClaims = new Map<string, Record<string, any>>();
 let nowMs = 1800000000000;
 let nextId = 0;
 
@@ -53,8 +57,14 @@ beforeEach(() => {
   nowMs = 1800000000000;
   nextId = 0;
   documents.clear();
+  authClaims.clear();
   documents.set('users/player', { schoolId: 'school-a', regionCode: 'region-a', role: 'player' });
   mock.method(Date, 'now', () => nowMs);
+  const auth = getAuth();
+  mock.method(auth, 'getUser', (async (uid: string) => ({ uid, customClaims: authClaims.get(uid) })) as any);
+  mock.method(auth, 'setCustomUserClaims', async (uid: string, claims: Record<string, any> | null) => {
+    authClaims.set(uid, { ...claims });
+  });
   const db = getFirestore();
   mock.method(db, 'collection', ((name: string) => ({
     doc: (id?: string) => document(`${name}/${id ?? `unit-${++nextId}`}`),
@@ -77,6 +87,11 @@ beforeEach(() => {
 afterEach(() => mock.restoreAll());
 
 describe('ranked callable contracts', () => {
+  it('rejects a client-selected question count before issuing a session', async () => {
+    await assert.rejects(createRankedSession.run(request({ level: 1, problemCount: 30 })),
+      { code: 'invalid-argument' });
+    assert.equal([...documents.keys()].some((path) => path.startsWith('ranked_sessions/')), false);
+  });
   it('keeps the ten-level API and its fixed-round scoring available', async () => {
     const session = await createRankedSession.run(request({ level: 6 }));
     assert.equal(session.level, 6);
@@ -131,5 +146,35 @@ describe('ranked callable contracts', () => {
     assert.equal(result.seasonBest, 0);
     assert.equal(result.isNewBest, false);
     assert.equal([...documents.keys()].some((path) => path.startsWith('aggregates/')), false);
+  });
+});
+
+describe('profile callable authorization', () => {
+  it('repairs a forged stored role during claims sync without granting it', async () => {
+    documents.get('users/player')!.role = 'admin';
+    await syncUserClaims.run(request({ role: 'admin' }));
+    assert.equal(authClaims.get('player')?.role, 'player');
+    assert.equal(documents.get('users/player')?.role, 'player');
+  });
+
+  it('ignores forged roles from both the existing profile and profile-save input', async () => {
+    documents.get('users/player')!.role = 'admin';
+    await upsertPlayerProfile.run(request({
+      displayName: 'Player', schoolId: 'school-b', regionCode: 'region-b', grade: 3, role: 'ops',
+    }));
+    assert.equal(authClaims.get('player')?.role, 'player');
+    assert.equal(documents.get('users/player')?.role, 'player');
+    assert.equal(authClaims.get('player')?.schoolId, 'school-b');
+  });
+
+  it('keeps an existing server-assigned role and unrelated claims after a profile save', async () => {
+    authClaims.set('player', { role: 'ops', support: true });
+    await upsertPlayerProfile.run(request({
+      displayName: 'Operator', schoolId: 'school-b', regionCode: 'region-b', grade: 6,
+    }));
+    assert.deepEqual(authClaims.get('player'), {
+      role: 'ops', support: true, schoolId: 'school-b', regionCode: 'region-b',
+    });
+    assert.equal(documents.get('users/player')?.role, 'ops');
   });
 });

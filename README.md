@@ -79,6 +79,14 @@ npm test
 npm run serve   # 빌드 후 에뮬레이터까지 띄웁니다 (firebase-tools는 npx로 받습니다)
 ```
 
+Firestore 권한 규칙은 저장소 루트에서 로컬 에뮬레이터로 검증합니다.
+
+```bash
+npx firebase-tools emulators:exec --only firestore --project demo-brain-math-rules "node scripts/test-firestore-rules.mjs"
+```
+
+이 검증은 프로필 생성, 권한 필드 수정·삭제, 서버 점수 필드 추가가 차단되는지 확인합니다.
+
 띄운 뒤 익명 로그인 → `upsertPlayerProfile` → `createRankedSession` →
 `submitRankedSession` 순서로 호출하면 한 판이 그대로 재현됩니다. 이때 받은 응답을
 붙여 넣은 계약 테스트가 `app/test/ranked_contract_test.dart`에 있어서, 서버가 필드

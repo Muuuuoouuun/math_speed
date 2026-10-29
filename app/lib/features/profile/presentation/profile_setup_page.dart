@@ -158,7 +158,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: AppSpacing.md),
                         DropdownButtonFormField<String>(
-                          value: _regionCode,
+                          initialValue: _regionCode,
                           decoration: const InputDecoration(labelText: '지역'),
                           items: kRegionOptions
                               .map(
@@ -182,7 +182,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: AppSpacing.md),
                         DropdownButtonFormField<String>(
-                          value: _schoolId,
+                          initialValue: _schoolId,
                           decoration: const InputDecoration(labelText: '학교'),
                           items: _selectedRegion.schools
                               .map(
@@ -201,7 +201,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: AppSpacing.md),
                         DropdownButtonFormField<int>(
-                          value: _grade,
+                          initialValue: _grade,
                           decoration: const InputDecoration(labelText: '학년'),
                           items: List<DropdownMenuItem<int>>.generate(
                             6,
