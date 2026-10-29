@@ -13,6 +13,7 @@ import '../../ink/domain/ink_models.dart';
 import '../../ink/presentation/ink_canvas.dart';
 import '../../profile/domain/player_profile.dart';
 import '../../profile/domain/profile_catalog.dart';
+import '../../time_attack/presentation/time_attack_page.dart';
 import '../application/game_session_controller.dart';
 import '../domain/game_mode.dart';
 import 'ranked_run_page.dart';
@@ -159,6 +160,18 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> with TickerProvid
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => RankedRunPage(level: _rankedLevel),
+      ),
+    );
+  }
+
+  Future<void> _openTimeAttack() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TimeAttackPage(
+          online: widget.environment.firebaseReady,
+          schoolId: widget.profile?.schoolId,
+          regionCode: widget.profile?.regionCode,
+        ),
       ),
     );
   }
@@ -356,6 +369,26 @@ class _BrainTrainingPageState extends State<BrainTrainingPage> with TickerProvid
               : '지금은 오프라인이라 랭크전을 열 수 없어요.',
           onLevelChanged: (value) => setState(() => _rankedLevel = value),
           onStart: _openRankedRun,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        PaperCard(
+          accent: AppPalette.mint,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('시간제 랭크전', style: theme.textTheme.titleLarge),
+              const SizedBox(height: AppSpacing.xs),
+              const Text('네 가지 모드에서 정답을 맞혀 시간을 늘려요.\n시간제 기록은 별도 순위에 반영돼요.'),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: widget.environment.firebaseReady && (profile?.isComplete ?? false)
+                    ? _openTimeAttack
+                    : null,
+                icon: const Icon(Icons.timer_outlined),
+                label: const Text('시간제 랭크전 열기'),
+              ),
+            ],
+          ),
         ),
       ],
     );

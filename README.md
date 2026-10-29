@@ -19,6 +19,17 @@
 - 학교/지역/전체 리더보드 집계 스키마
 - 종이·연필 톤의 UI 디자인 시스템과 시작 → 플레이 → 결과 화면 흐름
 - 랭크전 진행 화면과 학교/지역/전체 리더보드 표시
+- 4종 시간제 랭크전과 별도 시간제 순위
+
+## 두 가지 랭크전
+
+| 방식 | 서버 API | 규칙 | 전체 순위 묶음 |
+| --- | --- | --- | --- |
+| 10레벨 랭크전 | `createRankedSession` / `submitRankedSession` | 서버가 정한 문항 수를 모두 채점 | `all` |
+| 시간제 랭크전 | `createTimeAttackSessionV2` / `submitTimeAttackSessionV2` | 4종 모드, 정답 시 시간 회복 | `time-attack-all` |
+
+시간제 랭크전은 최대 400답안 또는 9분에 종료해 세션 만료 전에 제출합니다.
+두 방식은 점수 계산과 최고점·순위 집계를 분리합니다. 연습 모드는 연결 없이도 사용할 수 있습니다.
 
 ## 주의: 문제 생성기는 서버와 클라이언트가 똑같아야 합니다
 
@@ -32,6 +43,10 @@
 한쪽을 고치면 반드시 다른 쪽도 같이 고치고, 기준값을 다시 뽑아
 `app/test/ranked_problem_generator_test.dart`를 갱신해 주세요.
 이 테스트가 시드 12종 × 레벨 1~10, 1,700여 문제를 서버 출력과 1:1로 대조합니다.
+
+시간제 엔진은 `functions/src/gameEngine.ts`와 앱의 `features/time_attack/domain/`에 있습니다.
+`shared/engine_golden.json`을 양쪽 테스트에서 확인하며, 의도적으로 규칙을 바꿀 때만
+`functions/`의 `npm run golden`으로 기준값을 다시 생성합니다.
 
 기준값은 서버 코드를 그대로 실행해서 뽑습니다.
 
@@ -58,7 +73,9 @@ flutter test
 
 ```bash
 cd functions
-npm install
+npm ci
+npm run build
+npm test
 npm run serve   # 빌드 후 에뮬레이터까지 띄웁니다 (firebase-tools는 npx로 받습니다)
 ```
 
